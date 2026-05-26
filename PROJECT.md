@@ -86,3 +86,49 @@ Potentially useful research areas inside StoryBoardUI:
 5. How are walk, jog, run, sprint, and horse speed tiers represented internally?
 6. Is character model switching possible through script only, or does it require entity/template changes?
 7. Is automatic combat feasible through high-level AI/action APIs, or only through input simulation?
+
+## Research Log
+
+### 2026-05-26: StoryBoardUI Movement-Related Interfaces
+
+StoryBoardUI does not appear to directly implement automatic player walking or mounted wandering. Its movement-related code is mostly for:
+
+- Moving an interactive camera.
+- Moving and rotating spawned storyboard actors/items.
+- Teleporting entities to stored placements.
+- Freezing/unfreezing actors and forcing idle behavior so storyboard actors stay in place.
+
+Potentially useful interfaces and patterns:
+
+- `AddTimer('updateInteractiveSettings', 0.015f, true, , , , true)` and `RemoveTimer(...)` are used to run frequent movement update loops.
+- `theInput.GetActionValue('ActionName')` reads action axis values for continuous movement or rotation.
+- `theInput.RegisterListener(this, 'HandlerName', 'ActionName')` and `theInput.UnregisterListener(...)` are used for hotkey/action callbacks.
+- `CEntity.TeleportWithRotation(pos, rot)` moves an entity and sets rotation.
+- `CEntity.Teleport(pos)` moves an entity without rotation.
+- `CEntity.GetWorldPosition()` and `CEntity.GetWorldRotation()` read current transform.
+- `thePlayer.GetWorldPosition()` and `thePlayer.GetWorldRotation()` are used as valid spawn/origin positions.
+- `theGame.GetWorld().NavigationComputeZ(pos, minZ, maxZ, out groundZ)` and `PhysicsCorrectZ(pos, out groundZ)` are used to snap placements to valid ground height.
+- `CActor.GetMovingAgentComponent().GetMovementAdjustor()` plus `CreateNewRequest(...)`, `Continuous(...)`, and `RotateTo(...)` are used to force actor facing after teleport/placement.
+- `CActor.SetBehaviorVariable('requestedFacingDirection', yaw)` is used before unfreezing actor pose.
+- `CActor.ForceAIBehavior(new CAIIdleTree in actor, BTAP_AboveCombat)` is used to force spawned actors to stay idle.
+
+Relevant StoryBoardUI files:
+
+- `modStoryboardUi\content\scripts\local\workmodes\camera_mode.ws`
+  - `CStoryBoardInteractiveCamera.updateInteractiveSettings(...)` reads movement input, computes forward/left vectors from heading, and calls `TeleportWithRotation`.
+  - `OnChangeSpeed(...)` switches movement/rotation step sizes for fast/slow controls.
+- `modStoryboardUi\content\scripts\local\workmodes\placement_mode.ws`
+  - `CModStoryBoardInteractivePlacement.updateInteractiveSettings(...)` moves selected assets relative to camera heading, optionally snaps to ground, and calls `asset.setPlacement(...)`.
+  - `OnChangePlacementSpeed(...)` likely contains another fast/slow step-size pattern.
+- `modStoryboardUi\content\scripts\local\shotviewer\storyboardasset.ws`
+  - `CModStoryBoardAsset.setPlacement(...)` calls `entity.TeleportWithRotation(...)`.
+  - `CModStoryBoardActor.preventBehTreeRotation(...)` uses `CMovementAdjustor` to keep actor yaw after teleport.
+  - `CModStoryBoardActor.spawn(...)` shows actor setup, collision changes, temporary friendly attitude, and idle AI forcing.
+- `modStoryboardUi\content\scripts\local\shotviewer\placement_director.ws`
+  - `refreshDefaultPlacement(...)` uses player position as a valid origin and corrects Z with world navigation/physics helpers.
+
+Current implication for AutoDriver:
+
+- StoryBoardUI gives good implementation patterns for timers, input bindings, teleporting, ground correction, speed tiers, and actor rotation.
+- It does not yet reveal a high-level "walk player to target" or "wander mounted horse" API.
+- Next research should inspect base game scripts or other mods for `W3PlayerWitcher`, horse/mount classes, locomotion/AI movement requests, and possible input simulation APIs.
