@@ -251,3 +251,48 @@ Open risks after base-script search:
 - Direct `SetGameplayRelativeMoveSpeed` may be overwritten every frame by `CR4LocomotionPlayerControllerScript.UpdateLocomotion()`.
 - Some horse methods are `final function` inside `W3HorseComponent`; they may be callable from mod code if visibility permits, but this must be compile-tested.
 - Horse random teleport while mounted should be tested conservatively because rider/vehicle attachment state can break if only one entity is moved.
+
+### 2026-05-27: First AutoDriver Wander Prototype
+
+Created the first prototype script:
+
+```text
+AutoDriver\content\scripts\local\mod_autodriver.ws
+```
+
+Created input bindings:
+
+```text
+AutoDriver\AutoDriver.input.settings
+```
+
+Hotkeys:
+
+- `IK_NumPad3` -> `AutoDriver_WalkWander`
+- `IK_NumPad2` -> `AutoDriver_HorseWander`
+
+Bootstrap registration:
+
+- `modBootstrap-registry\content\scripts\local\mods_registry.ws` was updated to call `add(createAutoDriver());`.
+- The existing StoryBoardUI registration was preserved.
+
+Prototype design:
+
+- `CModAutoDriver` is a bootstrapped `CMod` statemachine.
+- `AutoDriver_WalkWander` repeatedly picks a random ground-corrected destination around the player and calls `thePlayer.ActionMoveTo(...)`.
+- `AutoDriver_HorseWander` requires `thePlayer.IsUsingHorse(true)`, gets the current mounted vehicle as a `CActor`, and calls `horse.ActionMoveTo(...)`.
+- Toggling either mode off calls `ActionCancelAll()` on `thePlayer` and on the horse actor when mounted.
+- Walking speed is fixed at `MT_Run` with absolute speed `1.0`.
+- Horse speed is fixed at `MT_Run` with absolute speed `2.0`.
+
+What this prototype is meant to validate:
+
+1. Whether `thePlayer.ActionMoveTo(...)` works for player-controlled Geralt in exploration.
+2. Whether calling `ActionMoveTo(...)` on the mounted horse actor works while the player is attached.
+3. Whether bootstrap + input registration is sufficient for the hotkeys to control AutoDriver.
+
+Known risks:
+
+- The game may reject `ActionMoveTo(...)` on the player if the player locomotion state overrides AI movement.
+- The mounted horse may ignore actor-level `ActionMoveTo(...)` because horse exploration state normally manages speed/direction internally.
+- If the `AutoDriver` folder name is not picked up by the game's mod loader, it may need to be renamed or mirrored as a conventional `modAutoDriver` folder.
