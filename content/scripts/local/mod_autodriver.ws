@@ -662,10 +662,7 @@ state AutoDriver_DirectWander in CModAutoDriver {
 state AutoDriver_CameraFollowNpc in CModAutoDriver {
     event OnEnterState(prevStateName: CName) {
         super.OnEnterState(prevStateName);
-        if (!parent.startGameCameraFollowNpc()) {
-            parent.GotoState('AutoDriver_Idle');
-            return;
-        }
+        parent.startGameCameraFollowNpc();
         CameraFollowLoop();
     }
 
@@ -685,10 +682,7 @@ state AutoDriver_CameraFollowNpc in CModAutoDriver {
 state AutoDriver_StaticCameraFollowNpc in CModAutoDriver {
     event OnEnterState(prevStateName: CName) {
         super.OnEnterState(prevStateName);
-        if (!parent.startStaticCameraFollowNpc()) {
-            parent.GotoState('AutoDriver_Idle');
-            return;
-        }
+        parent.startStaticCameraFollowNpc();
         StaticCameraFollowLoop();
     }
 
