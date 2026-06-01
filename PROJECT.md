@@ -503,3 +503,44 @@ C:\Users\64617\Documents\The Witcher 3\input.settings
 Current risk:
 
 - `NumPad4` is intentionally experimental. The player locomotion controller may overwrite direct moving-agent values every frame, but the loop writes them at a high frequency to test whether this control path is viable.
+
+### 2026-06-01: NPC Camera Follow Experiments
+
+Runtime observation:
+
+- `NumPad3` safer action-based wander still gets stuck easily.
+- `NumPad4` direct moving-agent wander does not move the player at all, which suggests the player locomotion controller overwrites or ignores this control path.
+
+New fallback direction:
+
+- Instead of forcing Geralt to move, let the game's existing town/community NPC AI provide the movement.
+- AutoDriver can then switch or drive the camera to follow a nearby moving NPC.
+
+Implemented experiments:
+
+- `NumPad5`: `AutoDriver_CameraFollowNpc`
+  - Finds a nearby moving alive actor with `GetActorsInRange(...)`.
+  - Uses `CActor.IsMoving()` or moving-agent velocity as the moving check.
+  - Calls `theGame.GetGameCamera().FollowWithRotation(npc)`.
+  - Calls `LookAt(npc, 0.2f, 0.0f)` and activates the game camera.
+  - Retargets if the selected NPC stops moving or gets too far away.
+- `NumPad6`: `AutoDriver_StaticCameraFollowNpc`
+  - Finds a nearby moving NPC using the same selector.
+  - Creates a `CStaticCamera` from StoryBoardUI's installed `interactive_camera.w2ent` template.
+  - Runs that static camera and updates it every `0.05` seconds.
+  - Places the camera behind the NPC and points it toward the NPC with `VecToRotation(...)`.
+  - Retargets if the selected NPC stops moving or gets too far away.
+
+Input bindings:
+
+- `NumPad5`: current game camera follows moving NPC.
+- `NumPad6`: AutoDriver-controlled static camera follows moving NPC.
+
+Current risk:
+
+- `NumPad5` may be overridden by the normal player camera stack.
+- `NumPad6` currently depends on StoryBoardUI's camera entity template being installed at:
+
+```text
+dlc\modtemplates\storyboardui\interactive_camera.w2ent
+```

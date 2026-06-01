@@ -2,8 +2,12 @@
 IK_NumPad2=(Action=AutoDriver_HorseWander)
 IK_NumPad3=(Action=AutoDriver_WalkWander)
 IK_NumPad4=(Action=AutoDriver_DirectWander)
+IK_NumPad5=(Action=AutoDriver_CameraFollowNpc)
+IK_NumPad6=(Action=AutoDriver_StaticCameraFollowNpc)
 
 [Exploration_Replacer_Ciri]
 IK_NumPad2=(Action=AutoDriver_HorseWander)
 IK_NumPad3=(Action=AutoDriver_WalkWander)
 IK_NumPad4=(Action=AutoDriver_DirectWander)
+IK_NumPad5=(Action=AutoDriver_CameraFollowNpc)
+IK_NumPad6=(Action=AutoDriver_StaticCameraFollowNpc)

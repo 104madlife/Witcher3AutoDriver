@@ -30,6 +30,14 @@ statemachine class CModAutoDriver extends CMod {
     protected var directRetargetInterval: float; default directRetargetInterval = 5.0;
     protected var directStuckTimeout: float; default directStuckTimeout = 2.0;
     protected var directSpeed: float; default directSpeed = 1.0;
+    protected var npcSearchRange: float; default npcSearchRange = 60.0;
+    protected var npcMinVelocity: float; default npcMinVelocity = 0.2;
+    protected var npcCamTickInterval: float; default npcCamTickInterval = 0.05;
+    protected var npcCamRetargetInterval: float; default npcCamRetargetInterval = 5.0;
+    protected var npcCamDistance: float; default npcCamDistance = 4.0;
+    protected var npcCamHeight: float; default npcCamHeight = 1.8;
+    protected var npcLookAtHeight: float; default npcLookAtHeight = 1.4;
+    protected var npcStaticCamFov: float; default npcStaticCamFov = 70.0f;
 
     protected var hasWalkTarget: bool;
     protected var currentWalkTarget: Vector;
@@ -41,16 +49,21 @@ statemachine class CModAutoDriver extends CMod {
     protected var directTargetIssuedAt: float;
     protected var lastDirectPosition: Vector;
     protected var lastDirectProgressAt: float;
+    protected var followedNpc: CActor;
+    protected var followedNpcSelectedAt: float;
+    protected var npcStaticCam: CStaticCamera;
 
     public function init() {
         super.init();
 
         theInput.RegisterListener(this, 'OnToggleWalkWander', 'AutoDriver_WalkWander');
         theInput.RegisterListener(this, 'OnToggleDirectWander', 'AutoDriver_DirectWander');
+        theInput.RegisterListener(this, 'OnToggleCameraFollowNpc', 'AutoDriver_CameraFollowNpc');
+        theInput.RegisterListener(this, 'OnToggleStaticCameraFollowNpc', 'AutoDriver_StaticCameraFollowNpc');
         theInput.RegisterListener(this, 'OnToggleHorseWander', 'AutoDriver_HorseWander');
 
         GotoState('AutoDriver_Idle');
-        notify("AutoDriver loaded: NumPad3 walk wander, NumPad4 direct wander, NumPad2 horse wander");
+        notify("AutoDriver loaded: NumPad3 walk, NumPad4 direct, NumPad5/6 NPC cam, NumPad2 horse");
     }
 
     protected function notify(message: String) {
@@ -65,6 +78,7 @@ statemachine class CModAutoDriver extends CMod {
         thePlayer.ActionCancelAll();
         resetWalkTarget();
         resetDirectTarget();
+        followedNpc = NULL;
 
         mac = thePlayer.GetMovingAgentComponent();
         if (mac) {
@@ -96,6 +110,178 @@ statemachine class CModAutoDriver extends CMod {
         }
 
         return result;
+    }
+
+    protected function findMovingNpc(out npc : CActor) : bool {
+        var actors: array<CActor>;
+        var actor: CActor;
+        var mac: CMovingAgentComponent;
+        var i: int;
+
+        actors = GetActorsInRange(thePlayer, npcSearchRange, 80, '', true);
+        for (i = 0; i < actors.Size(); i += 1) {
+            actor = actors[i];
+            if (!actor || actor == thePlayer) {
+                continue;
+            }
+
+            mac = actor.GetMovingAgentComponent();
+            if (!mac) {
+                continue;
+            }
+
+            if (actor.IsMoving() || VecLength(mac.GetVelocity()) >= npcMinVelocity) {
+                npc = actor;
+                followedNpc = actor;
+                followedNpcSelectedAt = theGame.GetEngineTimeAsSeconds();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function npcFollowNeedsRetarget() : bool {
+        var mac: CMovingAgentComponent;
+
+        if (!followedNpc) {
+            return true;
+        }
+
+        if (VecDistance2D(thePlayer.GetWorldPosition(), followedNpc.GetWorldPosition()) > npcSearchRange + 20.0f) {
+            return true;
+        }
+
+        mac = followedNpc.GetMovingAgentComponent();
+        if (!mac) {
+            return true;
+        }
+
+        if (!followedNpc.IsMoving() && VecLength(mac.GetVelocity()) < npcMinVelocity) {
+            if (theGame.GetEngineTimeAsSeconds() >= followedNpcSelectedAt + npcCamRetargetInterval) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function startGameCameraFollowNpc() : bool {
+        var npc: CActor;
+        var cam: CCamera;
+
+        if (!findMovingNpc(npc)) {
+            notify("AutoDriver could not find moving NPC nearby");
+            return false;
+        }
+
+        cam = (CCamera)theCamera.GetTopmostCameraObject();
+        if (!cam) {
+            notify("AutoDriver could not get top camera");
+            return false;
+        }
+
+        cam.FollowWithRotation(npc);
+        cam.LookAt(npc, 0.2f, 0.0f);
+        cam.SetActive(0.2f);
+        notify("AutoDriver camera following NPC");
+        return true;
+    }
+
+    protected function updateGameCameraFollowNpc() {
+        var npc: CActor;
+        var cam: CCamera;
+
+        if (npcFollowNeedsRetarget()) {
+            if (!findMovingNpc(npc)) {
+                return;
+            }
+
+            cam = (CCamera)theCamera.GetTopmostCameraObject();
+            if (cam) {
+                cam.FollowWithRotation(npc);
+                cam.LookAt(npc, 0.2f, 0.0f);
+            }
+        }
+    }
+
+    protected function ensureStaticNpcCamera() : bool {
+        var ent: CEntity;
+        var template: CEntityTemplate;
+
+        if (npcStaticCam) {
+            return true;
+        }
+
+        template = (CEntityTemplate)LoadResource("dlc\modtemplates\storyboardui\interactive_camera.w2ent", true);
+        if (!template) {
+            notify("AutoDriver could not load StoryBoardUI camera template");
+            return false;
+        }
+
+        ent = theGame.CreateEntity(template, thePlayer.GetWorldPosition(), thePlayer.GetWorldRotation());
+        npcStaticCam = (CStaticCamera)ent;
+        if (!npcStaticCam) {
+            notify("AutoDriver could not create static NPC camera");
+            return false;
+        }
+
+        npcStaticCam.SetFov(npcStaticCamFov);
+        return true;
+    }
+
+    protected function startStaticCameraFollowNpc() : bool {
+        var npc: CActor;
+
+        if (!findMovingNpc(npc)) {
+            notify("AutoDriver could not find moving NPC nearby");
+            return false;
+        }
+
+        if (!ensureStaticNpcCamera()) {
+            return false;
+        }
+
+        npcStaticCam.Run();
+        updateStaticCameraPlacement();
+        notify("AutoDriver static camera following NPC");
+        return true;
+    }
+
+    protected function updateStaticCameraPlacement() {
+        var npc: CActor;
+        var camPos: Vector;
+        var lookAt: Vector;
+        var forward: Vector;
+        var rot: EulerAngles;
+
+        if (npcFollowNeedsRetarget()) {
+            findMovingNpc(npc);
+        }
+
+        if (!followedNpc || !npcStaticCam) {
+            return;
+        }
+
+        forward = followedNpc.GetHeadingVector();
+        camPos = followedNpc.GetWorldPosition() - forward * npcCamDistance;
+        camPos.Z = camPos.Z + npcCamHeight;
+
+        lookAt = followedNpc.GetWorldPosition();
+        lookAt.Z = lookAt.Z + npcLookAtHeight;
+
+        rot = VecToRotation(lookAt - camPos);
+        npcStaticCam.TeleportWithRotation(camPos, rot);
+    }
+
+    protected function stopNpcCamera() {
+        followedNpc = NULL;
+
+        if (npcStaticCam && npcStaticCam.IsRunning()) {
+            npcStaticCam.Stop();
+        }
+
+        theGame.GetGameCamera().Activate(0.25f);
     }
 
     protected function findSafeWalkTarget(out target : Vector) : bool {
@@ -365,6 +551,32 @@ statemachine class CModAutoDriver extends CMod {
         }
     }
 
+    event OnToggleCameraFollowNpc(action: SInputAction) {
+        if (IsPressed(action)) {
+            if (GetCurrentStateName() == 'AutoDriver_CameraFollowNpc') {
+                stopNpcCamera();
+                GotoState('AutoDriver_Idle');
+                notify("AutoDriver NPC camera follow stopped");
+            } else {
+                stopCurrentAction();
+                GotoState('AutoDriver_CameraFollowNpc');
+            }
+        }
+    }
+
+    event OnToggleStaticCameraFollowNpc(action: SInputAction) {
+        if (IsPressed(action)) {
+            if (GetCurrentStateName() == 'AutoDriver_StaticCameraFollowNpc') {
+                stopNpcCamera();
+                GotoState('AutoDriver_Idle');
+                notify("AutoDriver static NPC camera stopped");
+            } else {
+                stopCurrentAction();
+                GotoState('AutoDriver_StaticCameraFollowNpc');
+            }
+        }
+    }
+
     event OnToggleHorseWander(action: SInputAction) {
         if (IsPressed(action)) {
             if (GetCurrentStateName() == 'AutoDriver_HorseWander') {
@@ -443,6 +655,52 @@ state AutoDriver_DirectWander in CModAutoDriver {
 
             parent.driveDirectMove();
             Sleep(parent.directTickInterval);
+        }
+    }
+}
+
+state AutoDriver_CameraFollowNpc in CModAutoDriver {
+    event OnEnterState(prevStateName: CName) {
+        super.OnEnterState(prevStateName);
+        if (!parent.startGameCameraFollowNpc()) {
+            parent.GotoState('AutoDriver_Idle');
+            return;
+        }
+        CameraFollowLoop();
+    }
+
+    event OnLeaveState(nextStateName: CName) {
+        parent.stopNpcCamera();
+        super.OnLeaveState(nextStateName);
+    }
+
+    entry function CameraFollowLoop() {
+        while (parent.GetCurrentStateName() == 'AutoDriver_CameraFollowNpc') {
+            parent.updateGameCameraFollowNpc();
+            Sleep(parent.npcCamTickInterval);
+        }
+    }
+}
+
+state AutoDriver_StaticCameraFollowNpc in CModAutoDriver {
+    event OnEnterState(prevStateName: CName) {
+        super.OnEnterState(prevStateName);
+        if (!parent.startStaticCameraFollowNpc()) {
+            parent.GotoState('AutoDriver_Idle');
+            return;
+        }
+        StaticCameraFollowLoop();
+    }
+
+    event OnLeaveState(nextStateName: CName) {
+        parent.stopNpcCamera();
+        super.OnLeaveState(nextStateName);
+    }
+
+    entry function StaticCameraFollowLoop() {
+        while (parent.GetCurrentStateName() == 'AutoDriver_StaticCameraFollowNpc') {
+            parent.updateStaticCameraPlacement();
+            Sleep(parent.npcCamTickInterval);
         }
     }
 }
