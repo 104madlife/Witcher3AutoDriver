@@ -350,3 +350,43 @@ return result;
 Expected result:
 
 - The compiler should get past `moveActorRandom`.
+
+### 2026-06-01: Merge AutoDriver Input Bindings
+
+Runtime observation:
+
+- AutoDriver displayed the startup HUD message in game, so bootstrap creation succeeded.
+- Pressing `NumPad2` / `NumPad3` produced no visible response.
+
+Diagnosis:
+
+- This indicates the mod instance exists, but the input actions were probably not bound in the live user input configuration.
+- `Documents\The Witcher 3\input.settings` contained StoryBoardUI's `IK_F7=(Action=SBUI_Maximize)` binding but did not contain any `AutoDriver_*` actions.
+- Therefore the mod-local `modAutoDriver.input.settings` file was not enough by itself for this installed setup; the live `input.settings` needed to be merged.
+
+Fix applied:
+
+- Backed up the live input file to:
+
+```text
+C:\Users\64617\Documents\The Witcher 3\input.settings.backup-before-AutoDriver-20260601-160411
+```
+
+- Added these bindings to `[Exploration]` and `[Exploration_Replacer_Ciri]` in:
+
+```text
+C:\Users\64617\Documents\The Witcher 3\input.settings
+```
+
+Bindings:
+
+```text
+IK_NumPad3=(Action=AutoDriver_WalkWander)
+IK_NumPad2=(Action=AutoDriver_HorseWander)
+```
+
+Expected result:
+
+- Pressing `NumPad3` while dismounted should now trigger the walk wander toggle and show a HUD message.
+- Pressing `NumPad2` while mounted should now trigger the horse wander toggle and show a HUD message.
+- If HUD messages appear but movement does not happen, the next issue is likely `ActionMoveTo(...)` or destination validity rather than input binding.
