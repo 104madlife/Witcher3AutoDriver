@@ -17,6 +17,14 @@ statemachine class CModAutoDriver extends CMod {
     protected var walkSpeed: float; default walkSpeed = 1.0;
     protected var horseSpeed: float; default horseSpeed = 2.0;
 
+    protected var walkArrivalDistance: float; default walkArrivalDistance = 3.0;
+    protected var walkTargetTimeout: float; default walkTargetTimeout = 10.0;
+    protected var walkTickInterval: float; default walkTickInterval = 0.5;
+
+    protected var hasWalkTarget: bool;
+    protected var currentWalkTarget: Vector;
+    protected var walkTargetIssuedAt: float;
+
     public function init() {
         super.init();
 
@@ -36,6 +44,7 @@ statemachine class CModAutoDriver extends CMod {
         var horse: CActor;
 
         thePlayer.ActionCancelAll();
+        resetWalkTarget();
 
         if (thePlayer.IsUsingHorse(true)) {
             horse = (CActor)thePlayer.GetUsedVehicle();
@@ -59,6 +68,59 @@ statemachine class CModAutoDriver extends CMod {
 
         if (world.PhysicsCorrectZ(result, groundZ)) {
             result.Z = groundZ;
+        }
+
+        return result;
+    }
+
+    protected function resetWalkTarget() {
+        hasWalkTarget = false;
+    }
+
+    protected function isWalkTargetReached() : bool {
+        if (!hasWalkTarget) {
+            return true;
+        }
+
+        return VecDistance2D(thePlayer.GetWorldPosition(), currentWalkTarget) <= walkArrivalDistance;
+    }
+
+    protected function isWalkTargetTimedOut() : bool {
+        if (!hasWalkTarget) {
+            return true;
+        }
+
+        return theGame.GetEngineTimeAsSeconds() >= walkTargetIssuedAt + walkTargetTimeout;
+    }
+
+    protected function issueWalkMoveAsync() : bool {
+        var playerActor: CActor;
+        var mac: CMovingAgentComponent;
+        var corrected: Vector;
+        var result: bool;
+
+        playerActor = (CActor)thePlayer;
+        if (!playerActor) {
+            return false;
+        }
+
+        currentWalkTarget = randomGroundPosition(thePlayer.GetWorldPosition(), minWalkDistance, maxWalkDistance);
+
+        mac = playerActor.GetMovingAgentComponent();
+        if (mac && !mac.IsPositionValid(currentWalkTarget)) {
+            if (mac.GetEndOfLineNavMeshPosition(currentWalkTarget, corrected)) {
+                currentWalkTarget = corrected;
+            }
+        }
+
+        result = playerActor.ActionMoveToAsync(currentWalkTarget, MT_Run, walkSpeed, walkArrivalDistance);
+        if (result) {
+            hasWalkTarget = true;
+            walkTargetIssuedAt = theGame.GetEngineTimeAsSeconds();
+            log.debug("walk target issued: " + VecToString(currentWalkTarget));
+        } else {
+            hasWalkTarget = false;
+            log.error("failed to issue walk target: " + VecToString(currentWalkTarget));
         }
 
         return result;
@@ -126,6 +188,7 @@ state AutoDriver_Idle in CModAutoDriver {
 state AutoDriver_WalkWander in CModAutoDriver {
     event OnEnterState(prevStateName: CName) {
         super.OnEnterState(prevStateName);
+        parent.resetWalkTarget();
         parent.notify("AutoDriver walk wander started");
         WalkLoop();
     }
@@ -143,8 +206,11 @@ state AutoDriver_WalkWander in CModAutoDriver {
                 return;
             }
 
-            parent.moveActorRandom((CActor)thePlayer, parent.minWalkDistance, parent.maxWalkDistance, MT_Run, parent.walkSpeed);
-            Sleep(0.5);
+            if (parent.isWalkTargetReached() || parent.isWalkTargetTimedOut()) {
+                parent.issueWalkMoveAsync();
+            }
+
+            Sleep(parent.walkTickInterval);
         }
     }
 }

@@ -390,3 +390,40 @@ Expected result:
 - Pressing `NumPad3` while dismounted should now trigger the walk wander toggle and show a HUD message.
 - Pressing `NumPad2` while mounted should now trigger the horse wander toggle and show a HUD message.
 - If HUD messages appear but movement does not happen, the next issue is likely `ActionMoveTo(...)` or destination validity rather than input binding.
+
+### 2026-06-01: Walk Wander Async Retarget Prototype
+
+Runtime observation:
+
+- `NumPad3` walk wander can move the player, confirming that `thePlayer.ActionMoveTo(...)` can work in exploration.
+- The movement stops after roughly 20 seconds even while AutoDriver remains enabled.
+
+Diagnosis:
+
+- The first walk prototype used a latent `ActionMoveTo(...)` call inside the state loop.
+- This made each loop iteration depend on the engine's one-shot movement action completing, timing out, or being interrupted.
+- For continuous data collection, AutoDriver should instead keep its own movement state and reissue destinations when the current destination is reached or considered stale.
+
+Fix applied:
+
+- Added persistent walk target state:
+  - `hasWalkTarget`
+  - `currentWalkTarget`
+  - `walkTargetIssuedAt`
+- Added walk tuning values:
+  - `walkArrivalDistance = 3.0`
+  - `walkTargetTimeout = 10.0`
+  - `walkTickInterval = 0.5`
+- Changed walk wander to use `thePlayer.ActionMoveToAsync(...)`.
+- The walk loop now:
+  1. Issues a random navmesh-corrected target when no target exists.
+  2. Checks every `0.5` seconds whether the player is within `3.0` meters of the target.
+  3. Reissues a new random target when the target is reached.
+  4. Reissues a new random target if the current target is older than `10.0` seconds.
+- Stopping or switching states resets the stored walk target and cancels player actions.
+
+Expected result:
+
+- `NumPad3` should produce longer continuous walking/running behavior than the first prototype.
+- If the player gets stuck or the engine silently drops a movement action, the timeout should recover by issuing a fresh target.
+- This version only changes walk wander. Horse wander still uses the original blocking `ActionMoveTo(...)` prototype and should be upgraded separately after walk behavior is validated.
