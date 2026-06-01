@@ -427,3 +427,34 @@ Expected result:
 - `NumPad3` should produce longer continuous walking/running behavior than the first prototype.
 - If the player gets stuck or the engine silently drops a movement action, the timeout should recover by issuing a fresh target.
 - This version only changes walk wander. Horse wander still uses the original blocking `ActionMoveTo(...)` prototype and should be upgraded separately after walk behavior is validated.
+
+### 2026-06-01: Walk Wander Stuck Recovery
+
+Runtime observation:
+
+- Walk wander still has obvious stuck cases.
+- Waiting longer than one minute did not visibly recover by issuing a new useful movement target.
+
+Diagnosis:
+
+- The previous async retarget version only tracked target age and distance to the target.
+- It did not verify whether the player was actually making world-position progress.
+- On timeout it also called `ActionMoveToAsync(...)` directly without explicitly cancelling the previous move action first.
+- If the engine kept the old movement action active internally, the new async move request could fail, be ignored, or be unable to take control.
+
+Fix applied:
+
+- Added progress tracking:
+  - `lastWalkPosition`
+  - `lastWalkProgressAt`
+  - `walkStuckDistance = 0.75`
+  - `walkStuckTimeout = 3.0`
+- The walk loop now updates actual player progress every `0.5` seconds.
+- If the player has not moved at least `0.75` meters within `3.0` seconds, AutoDriver treats the current move as stuck.
+- Every new walk target now first calls `thePlayer.ActionCancelAll()` before `ActionMoveToAsync(...)`.
+- Target age timeout was reduced from `10.0` seconds to `8.0` seconds.
+
+Expected result:
+
+- If Geralt runs into terrain, props, or an unreachable path edge, AutoDriver should recover within a few seconds by cancelling the old move and issuing a new random target.
+- This still uses action-based navigation. If the player controller itself stops accepting actor actions after some state transition, the next candidate approach is direct locomotion control through `SetGameplayRelativeMoveSpeed(...)` and `SetGameplayMoveDirection(...)`.

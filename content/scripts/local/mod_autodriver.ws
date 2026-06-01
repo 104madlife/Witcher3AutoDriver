@@ -18,12 +18,16 @@ statemachine class CModAutoDriver extends CMod {
     protected var horseSpeed: float; default horseSpeed = 2.0;
 
     protected var walkArrivalDistance: float; default walkArrivalDistance = 3.0;
-    protected var walkTargetTimeout: float; default walkTargetTimeout = 10.0;
+    protected var walkTargetTimeout: float; default walkTargetTimeout = 8.0;
     protected var walkTickInterval: float; default walkTickInterval = 0.5;
+    protected var walkStuckDistance: float; default walkStuckDistance = 0.75;
+    protected var walkStuckTimeout: float; default walkStuckTimeout = 3.0;
 
     protected var hasWalkTarget: bool;
     protected var currentWalkTarget: Vector;
     protected var walkTargetIssuedAt: float;
+    protected var lastWalkPosition: Vector;
+    protected var lastWalkProgressAt: float;
 
     public function init() {
         super.init();
@@ -75,6 +79,8 @@ statemachine class CModAutoDriver extends CMod {
 
     protected function resetWalkTarget() {
         hasWalkTarget = false;
+        lastWalkPosition = thePlayer.GetWorldPosition();
+        lastWalkProgressAt = theGame.GetEngineTimeAsSeconds();
     }
 
     protected function isWalkTargetReached() : bool {
@@ -93,6 +99,30 @@ statemachine class CModAutoDriver extends CMod {
         return theGame.GetEngineTimeAsSeconds() >= walkTargetIssuedAt + walkTargetTimeout;
     }
 
+    protected function updateWalkProgress() {
+        var currentPosition: Vector;
+
+        if (!hasWalkTarget) {
+            lastWalkPosition = thePlayer.GetWorldPosition();
+            lastWalkProgressAt = theGame.GetEngineTimeAsSeconds();
+            return;
+        }
+
+        currentPosition = thePlayer.GetWorldPosition();
+        if (VecDistance2D(currentPosition, lastWalkPosition) >= walkStuckDistance) {
+            lastWalkPosition = currentPosition;
+            lastWalkProgressAt = theGame.GetEngineTimeAsSeconds();
+        }
+    }
+
+    protected function isWalkTargetStuck() : bool {
+        if (!hasWalkTarget) {
+            return true;
+        }
+
+        return theGame.GetEngineTimeAsSeconds() >= lastWalkProgressAt + walkStuckTimeout;
+    }
+
     protected function issueWalkMoveAsync() : bool {
         var playerActor: CActor;
         var mac: CMovingAgentComponent;
@@ -104,6 +134,7 @@ statemachine class CModAutoDriver extends CMod {
             return false;
         }
 
+        playerActor.ActionCancelAll();
         currentWalkTarget = randomGroundPosition(thePlayer.GetWorldPosition(), minWalkDistance, maxWalkDistance);
 
         mac = playerActor.GetMovingAgentComponent();
@@ -117,6 +148,8 @@ statemachine class CModAutoDriver extends CMod {
         if (result) {
             hasWalkTarget = true;
             walkTargetIssuedAt = theGame.GetEngineTimeAsSeconds();
+            lastWalkPosition = thePlayer.GetWorldPosition();
+            lastWalkProgressAt = walkTargetIssuedAt;
             log.debug("walk target issued: " + VecToString(currentWalkTarget));
         } else {
             hasWalkTarget = false;
@@ -206,7 +239,9 @@ state AutoDriver_WalkWander in CModAutoDriver {
                 return;
             }
 
-            if (parent.isWalkTargetReached() || parent.isWalkTargetTimedOut()) {
+            parent.updateWalkProgress();
+
+            if (parent.isWalkTargetReached() || parent.isWalkTargetTimedOut() || parent.isWalkTargetStuck()) {
                 parent.issueWalkMoveAsync();
             }
 
