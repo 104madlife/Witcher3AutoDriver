@@ -74,6 +74,7 @@ statemachine class CModAutoDriver extends CMod {
         var whereTo: Vector;
         var mac: CMovingAgentComponent;
         var corrected: Vector;
+        var result: bool;
 
         if (!actor) {
             return false;
@@ -88,7 +89,8 @@ statemachine class CModAutoDriver extends CMod {
             }
         }
 
-        return actor.ActionMoveTo(whereTo, moveType, absSpeed, 1.5);
+        result = actor.ActionMoveTo(whereTo, moveType, absSpeed, 1.5);
+        return result;
     }
 
     event OnToggleWalkWander(action: SInputAction) {

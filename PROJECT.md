@@ -326,3 +326,27 @@ Expected result:
 
 - The game should now discover the scripts through the `modAutoDriver` loader-visible path.
 - `createAutoDriver()` should be available when `modBootstrap-registry` compiles.
+
+### 2026-06-01: Fix Latent Return Compile Error
+
+Second in-game compile attempt failed with:
+
+```text
+Error [modautodriver]local\mod_autodriver.ws(91): Function 'moveActorRandom' - latent calls not allowed in return statement
+```
+
+Diagnosis:
+
+- `CActor.ActionMoveTo(...)` is a latent function.
+- WitcherScript does not allow latent calls directly inside a `return` statement.
+
+Fix applied:
+
+```witcherscript
+result = actor.ActionMoveTo(whereTo, moveType, absSpeed, 1.5);
+return result;
+```
+
+Expected result:
+
+- The compiler should get past `moveActorRandom`.
