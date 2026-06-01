@@ -1,7 +1,9 @@
 [Exploration]
 IK_NumPad2=(Action=AutoDriver_HorseWander)
 IK_NumPad3=(Action=AutoDriver_WalkWander)
+IK_NumPad4=(Action=AutoDriver_DirectWander)
 
 [Exploration_Replacer_Ciri]
 IK_NumPad2=(Action=AutoDriver_HorseWander)
 IK_NumPad3=(Action=AutoDriver_WalkWander)
+IK_NumPad4=(Action=AutoDriver_DirectWander)

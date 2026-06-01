@@ -22,21 +22,35 @@ statemachine class CModAutoDriver extends CMod {
     protected var walkTickInterval: float; default walkTickInterval = 0.5;
     protected var walkStuckDistance: float; default walkStuckDistance = 0.75;
     protected var walkStuckTimeout: float; default walkStuckTimeout = 3.0;
+    protected var walkTargetCandidates: int; default walkTargetCandidates = 12;
+    protected var walkSafeSpotPersonalSpace: float; default walkSafeSpotPersonalSpace = 0.5;
+    protected var walkSafeSpotSearchRadius: float; default walkSafeSpotSearchRadius = 5.0;
+    protected var directTickInterval: float; default directTickInterval = 0.05;
+    protected var directArrivalDistance: float; default directArrivalDistance = 3.0;
+    protected var directRetargetInterval: float; default directRetargetInterval = 5.0;
+    protected var directStuckTimeout: float; default directStuckTimeout = 2.0;
+    protected var directSpeed: float; default directSpeed = 1.0;
 
     protected var hasWalkTarget: bool;
     protected var currentWalkTarget: Vector;
     protected var walkTargetIssuedAt: float;
     protected var lastWalkPosition: Vector;
     protected var lastWalkProgressAt: float;
+    protected var hasDirectTarget: bool;
+    protected var currentDirectTarget: Vector;
+    protected var directTargetIssuedAt: float;
+    protected var lastDirectPosition: Vector;
+    protected var lastDirectProgressAt: float;
 
     public function init() {
         super.init();
 
         theInput.RegisterListener(this, 'OnToggleWalkWander', 'AutoDriver_WalkWander');
+        theInput.RegisterListener(this, 'OnToggleDirectWander', 'AutoDriver_DirectWander');
         theInput.RegisterListener(this, 'OnToggleHorseWander', 'AutoDriver_HorseWander');
 
         GotoState('AutoDriver_Idle');
-        notify("AutoDriver loaded: NumPad3 walk wander, NumPad2 horse wander");
+        notify("AutoDriver loaded: NumPad3 walk wander, NumPad4 direct wander, NumPad2 horse wander");
     }
 
     protected function notify(message: String) {
@@ -46,9 +60,16 @@ statemachine class CModAutoDriver extends CMod {
 
     protected function stopCurrentAction() {
         var horse: CActor;
+        var mac: CMovingAgentComponent;
 
         thePlayer.ActionCancelAll();
         resetWalkTarget();
+        resetDirectTarget();
+
+        mac = thePlayer.GetMovingAgentComponent();
+        if (mac) {
+            mac.SetGameplayRelativeMoveSpeed(0.0f);
+        }
 
         if (thePlayer.IsUsingHorse(true)) {
             horse = (CActor)thePlayer.GetUsedVehicle();
@@ -77,10 +98,69 @@ statemachine class CModAutoDriver extends CMod {
         return result;
     }
 
+    protected function findSafeWalkTarget(out target : Vector) : bool {
+        var playerActor: CActor;
+        var mac: CMovingAgentComponent;
+        var world: CWorld;
+        var candidate: Vector;
+        var safeCandidate: Vector;
+        var fallback: Vector;
+        var hasFallback: bool;
+        var i: int;
+
+        playerActor = (CActor)thePlayer;
+        if (!playerActor) {
+            return false;
+        }
+
+        mac = playerActor.GetMovingAgentComponent();
+        world = theGame.GetWorld();
+
+        for (i = 0; i < walkTargetCandidates; i += 1) {
+            candidate = randomGroundPosition(thePlayer.GetWorldPosition(), minWalkDistance, maxWalkDistance);
+
+            if (world.NavigationFindSafeSpot(candidate, walkSafeSpotPersonalSpace, walkSafeSpotSearchRadius, safeCandidate)) {
+                candidate = safeCandidate;
+            }
+
+            if (mac && !mac.IsPositionValid(candidate)) {
+                continue;
+            }
+
+            if (!hasFallback) {
+                fallback = candidate;
+                hasFallback = true;
+            }
+
+            if (mac && mac.CanGoStraightToDestination(candidate)) {
+                target = candidate;
+                return true;
+            }
+
+            if (world.NavigationLineTest(thePlayer.GetWorldPosition(), candidate, walkSafeSpotPersonalSpace, false, true)) {
+                target = candidate;
+                return true;
+            }
+        }
+
+        if (hasFallback) {
+            target = fallback;
+            return true;
+        }
+
+        return false;
+    }
+
     protected function resetWalkTarget() {
         hasWalkTarget = false;
         lastWalkPosition = thePlayer.GetWorldPosition();
         lastWalkProgressAt = theGame.GetEngineTimeAsSeconds();
+    }
+
+    protected function resetDirectTarget() {
+        hasDirectTarget = false;
+        lastDirectPosition = thePlayer.GetWorldPosition();
+        lastDirectProgressAt = theGame.GetEngineTimeAsSeconds();
     }
 
     protected function isWalkTargetReached() : bool {
@@ -125,8 +205,6 @@ statemachine class CModAutoDriver extends CMod {
 
     protected function issueWalkMoveAsync() : bool {
         var playerActor: CActor;
-        var mac: CMovingAgentComponent;
-        var corrected: Vector;
         var result: bool;
 
         playerActor = (CActor)thePlayer;
@@ -135,13 +213,10 @@ statemachine class CModAutoDriver extends CMod {
         }
 
         playerActor.ActionCancelAll();
-        currentWalkTarget = randomGroundPosition(thePlayer.GetWorldPosition(), minWalkDistance, maxWalkDistance);
-
-        mac = playerActor.GetMovingAgentComponent();
-        if (mac && !mac.IsPositionValid(currentWalkTarget)) {
-            if (mac.GetEndOfLineNavMeshPosition(currentWalkTarget, corrected)) {
-                currentWalkTarget = corrected;
-            }
+        if (!findSafeWalkTarget(currentWalkTarget)) {
+            hasWalkTarget = false;
+            log.error("failed to find safe walk target");
+            return false;
         }
 
         result = playerActor.ActionMoveToAsync(currentWalkTarget, MT_Run, walkSpeed, walkArrivalDistance);
@@ -157,6 +232,82 @@ statemachine class CModAutoDriver extends CMod {
         }
 
         return result;
+    }
+
+    protected function issueDirectTarget() : bool {
+        if (!findSafeWalkTarget(currentDirectTarget)) {
+            hasDirectTarget = false;
+            log.error("failed to find direct target");
+            return false;
+        }
+
+        hasDirectTarget = true;
+        directTargetIssuedAt = theGame.GetEngineTimeAsSeconds();
+        lastDirectPosition = thePlayer.GetWorldPosition();
+        lastDirectProgressAt = directTargetIssuedAt;
+        log.debug("direct target issued: " + VecToString(currentDirectTarget));
+        return true;
+    }
+
+    protected function directTargetNeedsRefresh() : bool {
+        if (!hasDirectTarget) {
+            return true;
+        }
+
+        if (VecDistance2D(thePlayer.GetWorldPosition(), currentDirectTarget) <= directArrivalDistance) {
+            return true;
+        }
+
+        if (theGame.GetEngineTimeAsSeconds() >= directTargetIssuedAt + directRetargetInterval) {
+            return true;
+        }
+
+        return false;
+    }
+
+    protected function updateDirectProgress() {
+        var currentPosition: Vector;
+
+        if (!hasDirectTarget) {
+            lastDirectPosition = thePlayer.GetWorldPosition();
+            lastDirectProgressAt = theGame.GetEngineTimeAsSeconds();
+            return;
+        }
+
+        currentPosition = thePlayer.GetWorldPosition();
+        if (VecDistance2D(currentPosition, lastDirectPosition) >= walkStuckDistance) {
+            lastDirectPosition = currentPosition;
+            lastDirectProgressAt = theGame.GetEngineTimeAsSeconds();
+        }
+    }
+
+    protected function isDirectTargetStuck() : bool {
+        if (!hasDirectTarget) {
+            return true;
+        }
+
+        return theGame.GetEngineTimeAsSeconds() >= lastDirectProgressAt + directStuckTimeout;
+    }
+
+    protected function driveDirectMove() {
+        var mac: CMovingAgentComponent;
+        var direction: Vector;
+
+        if (!hasDirectTarget) {
+            return;
+        }
+
+        mac = thePlayer.GetMovingAgentComponent();
+        if (!mac) {
+            return;
+        }
+
+        direction = currentDirectTarget - thePlayer.GetWorldPosition();
+        direction.Z = 0.0f;
+
+        mac.SetGameplayRelativeMoveSpeed(directSpeed);
+        mac.SetGameplayMoveDirection(VecHeading(direction));
+        mac.SetDirectionChangeRate(10000.0f);
     }
 
     protected latent function moveActorRandom(
@@ -197,6 +348,19 @@ statemachine class CModAutoDriver extends CMod {
             } else {
                 stopCurrentAction();
                 GotoState('AutoDriver_WalkWander');
+            }
+        }
+    }
+
+    event OnToggleDirectWander(action: SInputAction) {
+        if (IsPressed(action)) {
+            if (GetCurrentStateName() == 'AutoDriver_DirectWander') {
+                stopCurrentAction();
+                GotoState('AutoDriver_Idle');
+                notify("AutoDriver direct wander stopped");
+            } else {
+                stopCurrentAction();
+                GotoState('AutoDriver_DirectWander');
             }
         }
     }
@@ -246,6 +410,39 @@ state AutoDriver_WalkWander in CModAutoDriver {
             }
 
             Sleep(parent.walkTickInterval);
+        }
+    }
+}
+
+state AutoDriver_DirectWander in CModAutoDriver {
+    event OnEnterState(prevStateName: CName) {
+        super.OnEnterState(prevStateName);
+        parent.resetDirectTarget();
+        parent.notify("AutoDriver direct wander started");
+        DirectLoop();
+    }
+
+    event OnLeaveState(nextStateName: CName) {
+        parent.stopCurrentAction();
+        super.OnLeaveState(nextStateName);
+    }
+
+    entry function DirectLoop() {
+        while (parent.GetCurrentStateName() == 'AutoDriver_DirectWander') {
+            if (thePlayer.IsUsingHorse(true)) {
+                parent.notify("AutoDriver direct wander requires dismounted player");
+                parent.GotoState('AutoDriver_Idle');
+                return;
+            }
+
+            parent.updateDirectProgress();
+
+            if (parent.directTargetNeedsRefresh() || parent.isDirectTargetStuck()) {
+                parent.issueDirectTarget();
+            }
+
+            parent.driveDirectMove();
+            Sleep(parent.directTickInterval);
         }
     }
 }

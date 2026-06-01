@@ -458,3 +458,48 @@ Expected result:
 
 - If Geralt runs into terrain, props, or an unreachable path edge, AutoDriver should recover within a few seconds by cancelling the old move and issuing a new random target.
 - This still uses action-based navigation. If the player controller itself stops accepting actor actions after some state transition, the next candidate approach is direct locomotion control through `SetGameplayRelativeMoveSpeed(...)` and `SetGameplayMoveDirection(...)`.
+
+### 2026-06-01: Safer Walk Targets And Direct Wander Experiment
+
+User direction:
+
+- Continue the short-term stable path on `NumPad3`.
+- Add the medium-term exploration path on `NumPad4`.
+
+Short-term `NumPad3` changes:
+
+- `AutoDriver_WalkWander` still uses `thePlayer.ActionMoveToAsync(...)`.
+- Target selection now generates multiple candidates instead of trusting a single random point.
+- Each candidate is processed with:
+  - `randomGroundPosition(...)`
+  - `theGame.GetWorld().NavigationFindSafeSpot(...)`
+  - `CMovingAgentComponent.IsPositionValid(...)`
+  - `CMovingAgentComponent.CanGoStraightToDestination(...)`
+  - `CWorld.NavigationLineTest(...)`
+- If a strong direct candidate is not found, the first safe valid fallback candidate is used.
+
+Medium-term `NumPad4` experiment:
+
+- Added `AutoDriver_DirectWander`.
+- This mode does not call `ActionMoveToAsync(...)`.
+- It repeatedly drives the player moving agent directly with:
+  - `SetGameplayRelativeMoveSpeed(directSpeed)`
+  - `SetGameplayMoveDirection(VecHeading(target - playerPosition))`
+  - `SetDirectionChangeRate(10000.0f)`
+- It uses the same safer target finder as `NumPad3`.
+- It retargets on arrival, after `5.0` seconds, or if actual player position does not progress for `2.0` seconds.
+
+Input bindings:
+
+- `NumPad2`: horse wander prototype.
+- `NumPad3`: safer action-based walk wander.
+- `NumPad4`: direct locomotion wander experiment.
+- The live user input file was updated at:
+
+```text
+C:\Users\64617\Documents\The Witcher 3\input.settings
+```
+
+Current risk:
+
+- `NumPad4` is intentionally experimental. The player locomotion controller may overwrite direct moving-agent values every frame, but the loop writes them at a high frequency to test whether this control path is viable.
