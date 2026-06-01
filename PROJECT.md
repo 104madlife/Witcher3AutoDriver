@@ -296,3 +296,33 @@ Known risks:
 - The game may reject `ActionMoveTo(...)` on the player if the player locomotion state overrides AI movement.
 - The mounted horse may ignore actor-level `ActionMoveTo(...)` because horse exploration state normally manages speed/direction internally.
 - If the `AutoDriver` folder name is not picked up by the game's mod loader, it may need to be renamed or mirrored as a conventional `modAutoDriver` folder.
+
+### 2026-06-01: Fix Mod Loader Visibility
+
+First in-game compile attempt failed with:
+
+```text
+Error [modbootstrap-registry]local\mods_registry.ws(10): Could not find function 'createAutoDriver'
+```
+
+Diagnosis:
+
+- `modBootstrap-registry` was correctly calling `add(createAutoDriver());`.
+- The error means the global `createAutoDriver()` function from `AutoDriver\content\scripts\local\mod_autodriver.ws` was not visible to the compiler.
+- The likely cause is that the folder was named `AutoDriver`, while Witcher 3 mod folders conventionally use names beginning with `mod`.
+
+Fix applied:
+
+- Created a directory junction:
+
+```text
+E:\SteamLibrary\steamapps\common\The Witcher 3\mods\modAutoDriver -> E:\SteamLibrary\steamapps\common\The Witcher 3\mods\AutoDriver
+```
+
+- Added `modAutoDriver.input.settings` alongside the existing `AutoDriver.input.settings`.
+- Kept the actual Git repository and source of truth in `AutoDriver`.
+
+Expected result:
+
+- The game should now discover the scripts through the `modAutoDriver` loader-visible path.
+- `createAutoDriver()` should be available when `modBootstrap-registry` compiles.
