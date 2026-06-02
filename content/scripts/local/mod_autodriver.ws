@@ -1,6 +1,28 @@
 // ----------------------------------------------------------------------------
 // AutoDriver prototype
 // ----------------------------------------------------------------------------
+class CAutoDriverMoveTRGSeek extends CMoveTRGScript {
+    public var target: Vector;
+    public var speed: float;
+    public var arrivalDistance: float;
+
+    function UpdateChannels(out goal: SMoveLocomotionGoal) {
+        var heading: Vector;
+
+        if (VecDistance2D(agent.GetWorldPosition(), target) <= arrivalDistance) {
+            SetFulfilled(goal, true);
+            return;
+        }
+
+        SetFulfilled(goal, false);
+        heading = Seek(target);
+        SetSpeedGoal(goal, speed);
+        SetHeadingGoal(goal, heading);
+        SetOrientationGoal(goal, VecHeading(heading));
+        MatchDirectionWithOrientation(goal, true);
+    }
+}
+
 statemachine class CModAutoDriver extends CMod {
     default modName = 'AutoDriver';
     default modAuthor = "104madlife";
@@ -25,6 +47,19 @@ statemachine class CModAutoDriver extends CMod {
     protected var walkTargetCandidates: int; default walkTargetCandidates = 12;
     protected var walkSafeSpotPersonalSpace: float; default walkSafeSpotPersonalSpace = 0.5;
     protected var walkSafeSpotSearchRadius: float; default walkSafeSpotSearchRadius = 5.0;
+    protected var tunedMoveMinDistance: float; default tunedMoveMinDistance = 3.0;
+    protected var tunedMoveMaxDistance: float; default tunedMoveMaxDistance = 7.0;
+    protected var tunedMoveTickInterval: float; default tunedMoveTickInterval = 1.5;
+    protected var tunedMoveTargetTimeout: float; default tunedMoveTargetTimeout = 12.0;
+    protected var tunedMoveArrivalDistance: float; default tunedMoveArrivalDistance = 1.4;
+    protected var tunedMoveSpeed: float; default tunedMoveSpeed = 1.0;
+    protected var tunedMoveIterations: int; default tunedMoveIterations = 8;
+    protected var customSeekMinDistance: float; default customSeekMinDistance = 6.0;
+    protected var customSeekMaxDistance: float; default customSeekMaxDistance = 14.0;
+    protected var customSeekTickInterval: float; default customSeekTickInterval = 0.5;
+    protected var customSeekTargetTimeout: float; default customSeekTargetTimeout = 10.0;
+    protected var customSeekArrivalDistance: float; default customSeekArrivalDistance = 2.0;
+    protected var customSeekSpeed: float; default customSeekSpeed = 1.0;
     protected var directTickInterval: float; default directTickInterval = 0.05;
     protected var directArrivalDistance: float; default directArrivalDistance = 3.0;
     protected var directRetargetInterval: float; default directRetargetInterval = 5.0;
@@ -62,6 +97,16 @@ statemachine class CModAutoDriver extends CMod {
     protected var npcCamSmoothingInitialized: bool;
     protected var smoothedNpcCamPos: Vector;
     protected var smoothedNpcCamRot: EulerAngles;
+    protected var hasTunedMoveTarget: bool;
+    protected var currentTunedMoveTarget: Vector;
+    protected var tunedMoveTargetIssuedAt: float;
+    protected var lastTunedMovePosition: Vector;
+    protected var lastTunedMoveProgressAt: float;
+    protected var hasCustomSeekTarget: bool;
+    protected var currentCustomSeekTarget: Vector;
+    protected var customSeekTargetIssuedAt: float;
+    protected var lastCustomSeekPosition: Vector;
+    protected var lastCustomSeekProgressAt: float;
 
     public function init() {
         super.init();
@@ -71,9 +116,11 @@ statemachine class CModAutoDriver extends CMod {
         theInput.RegisterListener(this, 'OnToggleCameraFollowNpc', 'AutoDriver_CameraFollowNpc');
         theInput.RegisterListener(this, 'OnToggleStaticCameraFollowNpc', 'AutoDriver_StaticCameraFollowNpc');
         theInput.RegisterListener(this, 'OnToggleHorseWander', 'AutoDriver_HorseWander');
+        theInput.RegisterListener(this, 'OnToggleTunedMovePointWander', 'AutoDriver_TunedMovePointWander');
+        theInput.RegisterListener(this, 'OnToggleCustomSeekWander', 'AutoDriver_CustomSeekWander');
 
         GotoState('AutoDriver_Idle');
-        notify("AutoDriver loaded: NumPad3 official walk, NumPad4 clone wander, NumPad5/6 NPC cam, NumPad2 horse");
+        notify("AutoDriver loaded: NumPad3 walk, NumPad4 clone, NumPad7 tuned move, NumPad8 custom seek");
     }
 
     protected function notify(message: String) {
@@ -88,6 +135,8 @@ statemachine class CModAutoDriver extends CMod {
         thePlayer.ActionCancelAll();
         resetWalkTarget();
         resetDirectTarget();
+        resetTunedMoveTarget();
+        resetCustomSeekTarget();
         followedNpc = NULL;
         followedNpcIsClone = false;
         npcCameraFollowUsesStaticFallback = false;
@@ -351,10 +400,14 @@ statemachine class CModAutoDriver extends CMod {
     }
 
     protected function findSafeWalkTarget(out target : Vector) : bool {
-        return findSafeTargetForActor((CActor)thePlayer, target);
+        return findSafeTargetForActorInRange((CActor)thePlayer, minWalkDistance, maxWalkDistance, target);
     }
 
     protected function findSafeTargetForActor(actor: CActor, out target : Vector) : bool {
+        return findSafeTargetForActorInRange(actor, minWalkDistance, maxWalkDistance, target);
+    }
+
+    protected function findSafeTargetForActorInRange(actor: CActor, minDistance: float, maxDistance: float, out target : Vector) : bool {
         var playerActor: CActor;
         var mac: CMovingAgentComponent;
         var world: CWorld;
@@ -373,7 +426,7 @@ statemachine class CModAutoDriver extends CMod {
         world = theGame.GetWorld();
 
         for (i = 0; i < walkTargetCandidates; i += 1) {
-            candidate = randomGroundPosition(playerActor.GetWorldPosition(), minWalkDistance, maxWalkDistance);
+            candidate = randomGroundPosition(playerActor.GetWorldPosition(), minDistance, maxDistance);
 
             if (world.NavigationFindSafeSpot(candidate, walkSafeSpotPersonalSpace, walkSafeSpotSearchRadius, safeCandidate)) {
                 candidate = safeCandidate;
@@ -417,6 +470,18 @@ statemachine class CModAutoDriver extends CMod {
         hasDirectTarget = false;
         lastDirectPosition = thePlayer.GetWorldPosition();
         lastDirectProgressAt = theGame.GetEngineTimeAsSeconds();
+    }
+
+    protected function resetTunedMoveTarget() {
+        hasTunedMoveTarget = false;
+        lastTunedMovePosition = thePlayer.GetWorldPosition();
+        lastTunedMoveProgressAt = theGame.GetEngineTimeAsSeconds();
+    }
+
+    protected function resetCustomSeekTarget() {
+        hasCustomSeekTarget = false;
+        lastCustomSeekPosition = thePlayer.GetWorldPosition();
+        lastCustomSeekProgressAt = theGame.GetEngineTimeAsSeconds();
     }
 
     protected function isWalkTargetReached() : bool {
@@ -488,6 +553,19 @@ statemachine class CModAutoDriver extends CMod {
     }
 
     protected function issueScriptedMoveToPoint(actor: CActor, target: Vector, speed: float, decoratePlayer: bool) : bool {
+        return issueScriptedMoveToPointEx(actor, target, speed, decoratePlayer, 1, walkTargetTimeout, walkArrivalDistance, true);
+    }
+
+    protected function issueScriptedMoveToPointEx(
+        actor: CActor,
+        target: Vector,
+        speed: float,
+        decoratePlayer: bool,
+        iterations: int,
+        timeout: float,
+        arrivalDistance: float,
+        interruptOnInput: bool
+    ) : bool {
         var aiTree: CAIMoveToPoint;
         var decorator: CAIPlayerActionDecorator;
         var heading: Vector;
@@ -512,10 +590,10 @@ statemachine class CModAutoDriver extends CMod {
             aiTree.params.destinationHeading = VecHeading(actor.GetHeadingVector());
         }
 
-        aiTree.params.maxDistance = walkArrivalDistance;
-        aiTree.params.maxIterationsNumber = 1;
+        aiTree.params.maxDistance = arrivalDistance;
+        aiTree.params.maxIterationsNumber = iterations;
         aiTree.params.useTimeout = true;
-        aiTree.params.timeoutValue = walkTargetTimeout;
+        aiTree.params.timeoutValue = timeout;
 
         if (speed >= 2.0f) {
             aiTree.params.moveType = MT_Sprint;
@@ -530,7 +608,7 @@ statemachine class CModAutoDriver extends CMod {
 
             decorator = new CAIPlayerActionDecorator in actor;
             decorator.OnCreated();
-            decorator.interruptOnInput = true;
+            decorator.interruptOnInput = interruptOnInput;
             decorator.scriptedAction = aiTree;
 
             if (decorator) {
@@ -543,6 +621,160 @@ statemachine class CModAutoDriver extends CMod {
         }
 
         return true;
+    }
+
+    protected function issueTunedMovePointTarget() : bool {
+        var playerActor: CActor;
+
+        playerActor = (CActor)thePlayer;
+        if (!playerActor) {
+            return false;
+        }
+
+        if (!findSafeTargetForActorInRange(playerActor, tunedMoveMinDistance, tunedMoveMaxDistance, currentTunedMoveTarget)) {
+            hasTunedMoveTarget = false;
+            log.error("failed to find tuned move target");
+            return false;
+        }
+
+        if (issueScriptedMoveToPointEx(
+            playerActor,
+            currentTunedMoveTarget,
+            tunedMoveSpeed,
+            true,
+            tunedMoveIterations,
+            tunedMoveTargetTimeout,
+            tunedMoveArrivalDistance,
+            false
+        )) {
+            hasTunedMoveTarget = true;
+            tunedMoveTargetIssuedAt = theGame.GetEngineTimeAsSeconds();
+            lastTunedMovePosition = thePlayer.GetWorldPosition();
+            lastTunedMoveProgressAt = tunedMoveTargetIssuedAt;
+            log.debug("tuned move target issued: " + VecToString(currentTunedMoveTarget));
+        } else {
+            hasTunedMoveTarget = false;
+            log.error("failed to issue tuned move target: " + VecToString(currentTunedMoveTarget));
+        }
+
+        return hasTunedMoveTarget;
+    }
+
+    protected function tunedMoveTargetNeedsRefresh() : bool {
+        if (!hasTunedMoveTarget) {
+            return true;
+        }
+
+        if (VecDistance2D(thePlayer.GetWorldPosition(), currentTunedMoveTarget) <= tunedMoveArrivalDistance) {
+            return true;
+        }
+
+        if (theGame.GetEngineTimeAsSeconds() >= tunedMoveTargetIssuedAt + tunedMoveTargetTimeout) {
+            return true;
+        }
+
+        return false;
+    }
+
+    protected function updateTunedMoveProgress() {
+        var currentPosition: Vector;
+
+        if (!hasTunedMoveTarget) {
+            lastTunedMovePosition = thePlayer.GetWorldPosition();
+            lastTunedMoveProgressAt = theGame.GetEngineTimeAsSeconds();
+            return;
+        }
+
+        currentPosition = thePlayer.GetWorldPosition();
+        if (VecDistance2D(currentPosition, lastTunedMovePosition) >= walkStuckDistance) {
+            lastTunedMovePosition = currentPosition;
+            lastTunedMoveProgressAt = theGame.GetEngineTimeAsSeconds();
+        }
+    }
+
+    protected function isTunedMoveTargetStuck() : bool {
+        if (!hasTunedMoveTarget) {
+            return true;
+        }
+
+        return theGame.GetEngineTimeAsSeconds() >= lastTunedMoveProgressAt + walkStuckTimeout;
+    }
+
+    protected function issueCustomSeekTarget() : bool {
+        var playerActor: CActor;
+        var targeter: CAutoDriverMoveTRGSeek;
+        var result: bool;
+
+        playerActor = (CActor)thePlayer;
+        if (!playerActor) {
+            return false;
+        }
+
+        if (!findSafeTargetForActorInRange(playerActor, customSeekMinDistance, customSeekMaxDistance, currentCustomSeekTarget)) {
+            hasCustomSeekTarget = false;
+            log.error("failed to find custom seek target");
+            return false;
+        }
+
+        playerActor.ActionCancelAll();
+        targeter = new CAutoDriverMoveTRGSeek in playerActor;
+        targeter.target = currentCustomSeekTarget;
+        targeter.speed = customSeekSpeed;
+        targeter.arrivalDistance = customSeekArrivalDistance;
+        result = playerActor.ActionMoveCustomAsync(targeter);
+
+        if (result) {
+            hasCustomSeekTarget = true;
+            customSeekTargetIssuedAt = theGame.GetEngineTimeAsSeconds();
+            lastCustomSeekPosition = thePlayer.GetWorldPosition();
+            lastCustomSeekProgressAt = customSeekTargetIssuedAt;
+            log.debug("custom seek target issued: " + VecToString(currentCustomSeekTarget));
+        } else {
+            hasCustomSeekTarget = false;
+            log.error("failed to issue custom seek target: " + VecToString(currentCustomSeekTarget));
+        }
+
+        return result;
+    }
+
+    protected function customSeekTargetNeedsRefresh() : bool {
+        if (!hasCustomSeekTarget) {
+            return true;
+        }
+
+        if (VecDistance2D(thePlayer.GetWorldPosition(), currentCustomSeekTarget) <= customSeekArrivalDistance) {
+            return true;
+        }
+
+        if (theGame.GetEngineTimeAsSeconds() >= customSeekTargetIssuedAt + customSeekTargetTimeout) {
+            return true;
+        }
+
+        return false;
+    }
+
+    protected function updateCustomSeekProgress() {
+        var currentPosition: Vector;
+
+        if (!hasCustomSeekTarget) {
+            lastCustomSeekPosition = thePlayer.GetWorldPosition();
+            lastCustomSeekProgressAt = theGame.GetEngineTimeAsSeconds();
+            return;
+        }
+
+        currentPosition = thePlayer.GetWorldPosition();
+        if (VecDistance2D(currentPosition, lastCustomSeekPosition) >= walkStuckDistance) {
+            lastCustomSeekPosition = currentPosition;
+            lastCustomSeekProgressAt = theGame.GetEngineTimeAsSeconds();
+        }
+    }
+
+    protected function isCustomSeekTargetStuck() : bool {
+        if (!hasCustomSeekTarget) {
+            return true;
+        }
+
+        return theGame.GetEngineTimeAsSeconds() >= lastCustomSeekProgressAt + walkStuckTimeout;
     }
 
     protected function issueDirectTarget() : bool {
@@ -773,6 +1005,32 @@ statemachine class CModAutoDriver extends CMod {
             }
         }
     }
+
+    event OnToggleTunedMovePointWander(action: SInputAction) {
+        if (IsPressed(action)) {
+            if (GetCurrentStateName() == 'AutoDriver_TunedMovePointWander') {
+                stopCurrentAction();
+                GotoState('AutoDriver_Idle');
+                notify("AutoDriver tuned move point wander stopped");
+            } else {
+                stopCurrentAction();
+                GotoState('AutoDriver_TunedMovePointWander');
+            }
+        }
+    }
+
+    event OnToggleCustomSeekWander(action: SInputAction) {
+        if (IsPressed(action)) {
+            if (GetCurrentStateName() == 'AutoDriver_CustomSeekWander') {
+                stopCurrentAction();
+                GotoState('AutoDriver_Idle');
+                notify("AutoDriver custom seek wander stopped");
+            } else {
+                stopCurrentAction();
+                GotoState('AutoDriver_CustomSeekWander');
+            }
+        }
+    }
 }
 
 state AutoDriver_Idle in CModAutoDriver {
@@ -882,6 +1140,70 @@ state AutoDriver_StaticCameraFollowNpc in CModAutoDriver {
         while (parent.GetCurrentStateName() == 'AutoDriver_StaticCameraFollowNpc') {
             parent.updateStaticCameraPlacement();
             Sleep(parent.npcCamTickInterval);
+        }
+    }
+}
+
+state AutoDriver_TunedMovePointWander in CModAutoDriver {
+    event OnEnterState(prevStateName: CName) {
+        super.OnEnterState(prevStateName);
+        parent.resetTunedMoveTarget();
+        parent.notify("AutoDriver tuned move point wander started");
+        TunedMovePointLoop();
+    }
+
+    event OnLeaveState(nextStateName: CName) {
+        parent.stopCurrentAction();
+        super.OnLeaveState(nextStateName);
+    }
+
+    entry function TunedMovePointLoop() {
+        while (parent.GetCurrentStateName() == 'AutoDriver_TunedMovePointWander') {
+            if (thePlayer.IsUsingHorse(true)) {
+                parent.notify("AutoDriver tuned move point requires dismounted player");
+                parent.GotoState('AutoDriver_Idle');
+                return;
+            }
+
+            parent.updateTunedMoveProgress();
+
+            if (parent.tunedMoveTargetNeedsRefresh() || parent.isTunedMoveTargetStuck()) {
+                parent.issueTunedMovePointTarget();
+            }
+
+            Sleep(parent.tunedMoveTickInterval);
+        }
+    }
+}
+
+state AutoDriver_CustomSeekWander in CModAutoDriver {
+    event OnEnterState(prevStateName: CName) {
+        super.OnEnterState(prevStateName);
+        parent.resetCustomSeekTarget();
+        parent.notify("AutoDriver custom seek wander started");
+        CustomSeekLoop();
+    }
+
+    event OnLeaveState(nextStateName: CName) {
+        parent.stopCurrentAction();
+        super.OnLeaveState(nextStateName);
+    }
+
+    entry function CustomSeekLoop() {
+        while (parent.GetCurrentStateName() == 'AutoDriver_CustomSeekWander') {
+            if (thePlayer.IsUsingHorse(true)) {
+                parent.notify("AutoDriver custom seek requires dismounted player");
+                parent.GotoState('AutoDriver_Idle');
+                return;
+            }
+
+            parent.updateCustomSeekProgress();
+
+            if (parent.customSeekTargetNeedsRefresh() || parent.isCustomSeekTargetStuck()) {
+                parent.issueCustomSeekTarget();
+            }
+
+            Sleep(parent.customSeekTickInterval);
         }
     }
 }

@@ -738,3 +738,52 @@ if (!condition) {
 Related earlier compile note:
 
 - Latent calls cannot be placed directly in a return statement. Store the result in a local variable first, then return that variable.
+
+### 2026-06-02: NumPad7 And NumPad8 Player Movement Experiments
+
+Implemented two new experiments without replacing the existing `NumPad3` and `NumPad4` behavior.
+
+`NumPad7`: tuned `CAIMoveToPoint` player wander
+
+- Action name: `AutoDriver_TunedMovePointWander`.
+- Uses the same official-style player route as `NumPad3`:
+  - `CAIMoveToPoint`
+  - `CAIPlayerActionDecorator`
+  - `ForceAIBehavior(..., BTAP_Emergency)`
+- Differences from `NumPad3`:
+  - shorter target distance: `3.0` to `7.0`
+  - `maxIterationsNumber = 8`
+  - `interruptOnInput = false`
+  - lower reissue cadence: `1.5` seconds
+  - target timeout: `12.0` seconds
+  - arrival distance: `1.4`
+- Goal: test whether the official scripted move action can become continuous enough when it is not constantly interrupted/reissued.
+
+`NumPad8`: custom `CMoveTRGScript` seek wander
+
+- Action name: `AutoDriver_CustomSeekWander`.
+- Adds `CAutoDriverMoveTRGSeek extends CMoveTRGScript`.
+- Each locomotion update:
+  - checks distance to target,
+  - calls `Seek(target)` for heading,
+  - calls `SetSpeedGoal(...)`,
+  - calls `SetHeadingGoal(...)`,
+  - calls `SetOrientationGoal(...)`,
+  - calls `MatchDirectionWithOrientation(...)`.
+- Movement is started with `thePlayer.ActionMoveCustomAsync(targeter)`.
+- Goal: test whether a continuous locomotion targeter works better than one-shot scripted actions.
+
+Input updates:
+
+- Added `IK_NumPad7=(Action=AutoDriver_TunedMovePointWander)`.
+- Added `IK_NumPad8=(Action=AutoDriver_CustomSeekWander)`.
+- Updated both mod input files and the live file:
+
+```text
+C:\Users\64617\Documents\The Witcher 3\input.settings
+```
+
+Risks:
+
+- `ActionMoveCustomAsync(...)` may still be blocked or overwritten by the real player exploration controller.
+- `CMoveTRGScript` compiles in base game behavior-tree tasks, but this is AutoDriver's first custom top-level targeter, so syntax or engine ownership issues may appear during game script compilation.
