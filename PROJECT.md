@@ -706,3 +706,35 @@ Known risks:
 - The clone currently uses StoryBoardUI's template directly, but does not yet clone the player's equipment/appearance the way StoryBoardUI's full `CModStoryBoardActor.cloneFromPlayer(...)` path does.
 - If the template cannot be loaded because StoryBoardUI's DLC resources are not installed or not mounted, `NumPad4` will report a template load failure.
 - `NumPad4` currently uses `CAIMoveToPoint`; `CAIDynamicWander` remains a later experiment if clone movement still sticks too easily.
+
+### 2026-06-02: WitcherScript Compile Notes
+
+Observed compile error:
+
+```text
+Error [modautodriver]local\mod_autodriver.ws(819): Unable to convert from 'void' to 'Bool'
+```
+
+Cause:
+
+- The failing line was a bare `return;` inside `event OnEnterState(...)`.
+- WitcherScript can report this as a `void` to `Bool` conversion error in state/event contexts, even though the surrounding logic looks unrelated to a boolean conversion.
+
+Rule learned:
+
+- Avoid early bare `return;` inside `event OnEnterState(...)`.
+- Prefer:
+
+```witcherscript
+if (!condition) {
+    parent.GotoState('AutoDriver_Idle');
+} else {
+    WorkLoop();
+}
+```
+
+- Keep `return;` in `entry function` loops only when it has already been proven to compile.
+
+Related earlier compile note:
+
+- Latent calls cannot be placed directly in a return statement. Store the result in a local variable first, then return that variable.

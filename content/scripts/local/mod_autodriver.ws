@@ -816,9 +816,9 @@ state AutoDriver_DirectWander in CModAutoDriver {
         parent.resetDirectTarget();
         if (!parent.startCloneWander()) {
             parent.GotoState('AutoDriver_Idle');
-            return;
+        } else {
+            DirectLoop();
         }
-        DirectLoop();
     }
 
     event OnLeaveState(nextStateName: CName) {
