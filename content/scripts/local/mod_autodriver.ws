@@ -38,6 +38,8 @@ statemachine class CModAutoDriver extends CMod {
     protected var npcCamHeight: float; default npcCamHeight = 1.8;
     protected var npcLookAtHeight: float; default npcLookAtHeight = 1.4;
     protected var npcStaticCamFov: float; default npcStaticCamFov = 70.0f;
+    protected var npcCamPositionSmooth: float; default npcCamPositionSmooth = 5.0f;
+    protected var npcCamRotationSmooth: float; default npcCamRotationSmooth = 7.0f;
 
     protected var hasWalkTarget: bool;
     protected var currentWalkTarget: Vector;
@@ -52,6 +54,10 @@ statemachine class CModAutoDriver extends CMod {
     protected var followedNpc: CActor;
     protected var followedNpcSelectedAt: float;
     protected var npcStaticCam: CStaticCamera;
+    protected var npcCameraFollowUsesStaticFallback: bool;
+    protected var npcCamSmoothingInitialized: bool;
+    protected var smoothedNpcCamPos: Vector;
+    protected var smoothedNpcCamRot: EulerAngles;
 
     public function init() {
         super.init();
@@ -79,6 +85,8 @@ statemachine class CModAutoDriver extends CMod {
         resetWalkTarget();
         resetDirectTarget();
         followedNpc = NULL;
+        npcCameraFollowUsesStaticFallback = false;
+        npcCamSmoothingInitialized = false;
 
         mac = thePlayer.GetMovingAgentComponent();
         if (mac) {
@@ -132,6 +140,9 @@ statemachine class CModAutoDriver extends CMod {
 
             if (actor.IsMoving() || VecLength(mac.GetVelocity()) >= npcMinVelocity) {
                 npc = actor;
+                if (followedNpc != actor) {
+                    npcCamSmoothingInitialized = false;
+                }
                 followedNpc = actor;
                 followedNpcSelectedAt = theGame.GetEngineTimeAsSeconds();
                 return true;
@@ -177,10 +188,19 @@ statemachine class CModAutoDriver extends CMod {
 
         cam = (CCamera)theCamera.GetTopmostCameraObject();
         if (!cam) {
-            notify("AutoDriver could not get top camera");
-            return false;
+            if (!ensureStaticNpcCamera()) {
+                notify("AutoDriver could not get top camera");
+                return false;
+            }
+
+            npcCameraFollowUsesStaticFallback = true;
+            npcStaticCam.Run();
+            updateStaticCameraPlacement();
+            notify("AutoDriver top camera unavailable, using static NPC camera");
+            return true;
         }
 
+        npcCameraFollowUsesStaticFallback = false;
         cam.FollowWithRotation(npc);
         cam.LookAt(npc, 0.2f, 0.0f);
         cam.SetActive(0.2f);
@@ -191,6 +211,11 @@ statemachine class CModAutoDriver extends CMod {
     protected function updateGameCameraFollowNpc() {
         var npc: CActor;
         var cam: CCamera;
+
+        if (npcCameraFollowUsesStaticFallback) {
+            updateStaticCameraPlacement();
+            return;
+        }
 
         if (npcFollowNeedsRetarget()) {
             if (!findMovingNpc(npc)) {
@@ -251,9 +276,13 @@ statemachine class CModAutoDriver extends CMod {
     protected function updateStaticCameraPlacement() {
         var npc: CActor;
         var camPos: Vector;
+        var desiredPos: Vector;
         var lookAt: Vector;
         var forward: Vector;
+        var velocity: Vector;
         var rot: EulerAngles;
+        var posAlpha: float;
+        var rotAlpha: float;
 
         if (npcFollowNeedsRetarget()) {
             findMovingNpc(npc);
@@ -263,19 +292,44 @@ statemachine class CModAutoDriver extends CMod {
             return;
         }
 
-        forward = followedNpc.GetHeadingVector();
-        camPos = followedNpc.GetWorldPosition() - forward * npcCamDistance;
-        camPos.Z = camPos.Z + npcCamHeight;
+        velocity = followedNpc.GetMovingAgentComponent().GetVelocity();
+        velocity.Z = 0.0f;
+        if (VecLength(velocity) >= npcMinVelocity) {
+            forward = VecNormalize(velocity);
+        } else {
+            forward = followedNpc.GetHeadingVector();
+        }
+
+        desiredPos = followedNpc.GetWorldPosition() - forward * npcCamDistance;
+        desiredPos.Z = desiredPos.Z + npcCamHeight;
 
         lookAt = followedNpc.GetWorldPosition();
         lookAt.Z = lookAt.Z + npcLookAtHeight;
 
-        rot = VecToRotation(lookAt - camPos);
-        npcStaticCam.TeleportWithRotation(camPos, rot);
+        rot = VecToRotation(lookAt - desiredPos);
+
+        if (!npcCamSmoothingInitialized) {
+            smoothedNpcCamPos = desiredPos;
+            smoothedNpcCamRot = rot;
+            npcCamSmoothingInitialized = true;
+        } else {
+            posAlpha = MinF(1.0f, npcCamPositionSmooth * npcCamTickInterval);
+            rotAlpha = MinF(1.0f, npcCamRotationSmooth * npcCamTickInterval);
+
+            smoothedNpcCamPos = LerpV(smoothedNpcCamPos, desiredPos, posAlpha);
+            smoothedNpcCamRot.Pitch = LerpAngleF(rotAlpha, smoothedNpcCamRot.Pitch, rot.Pitch);
+            smoothedNpcCamRot.Yaw = LerpAngleF(rotAlpha, smoothedNpcCamRot.Yaw, rot.Yaw);
+            smoothedNpcCamRot.Roll = LerpAngleF(rotAlpha, smoothedNpcCamRot.Roll, rot.Roll);
+        }
+
+        camPos = smoothedNpcCamPos;
+        npcStaticCam.TeleportWithRotation(camPos, smoothedNpcCamRot);
     }
 
     protected function stopNpcCamera() {
         followedNpc = NULL;
+        npcCameraFollowUsesStaticFallback = false;
+        npcCamSmoothingInitialized = false;
 
         if (npcStaticCam && npcStaticCam.IsRunning()) {
             npcStaticCam.Stop();

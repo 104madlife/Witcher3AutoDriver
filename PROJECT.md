@@ -544,3 +544,35 @@ Current risk:
 ```text
 dlc\modtemplates\storyboardui\interactive_camera.w2ent
 ```
+
+### 2026-06-02: NPC Camera Fallback And Smoothing
+
+Runtime observation:
+
+- Pressing `NumPad5` showed `could not get top camera`.
+- Pressing `NumPad6` followed a nearby NPC, but the camera visibly jittered.
+
+Diagnosis:
+
+- `NumPad5` tried to cast `theCamera.GetTopmostCameraObject()` to `CCamera`.
+- In the normal exploration camera stack the top camera object can be a `CCustomCamera`, so the cast fails and the direct `FollowWithRotation(...)` route is not available.
+- `NumPad6` updated camera transform with hard `TeleportWithRotation(...)` every `0.05` seconds.
+- NPC heading/animation/velocity changes can fluctuate slightly every frame, and hard teleporting directly to those values amplifies the shake.
+
+Fix applied:
+
+- `NumPad5` now automatically falls back to the static NPC camera route when no usable top `CCamera` is available.
+- Added camera smoothing state:
+  - `npcCamSmoothingInitialized`
+  - `smoothedNpcCamPos`
+  - `smoothedNpcCamRot`
+  - `npcCamPositionSmooth = 5.0`
+  - `npcCamRotationSmooth = 7.0`
+- `NumPad6` now interpolates camera position with `LerpV(...)`.
+- `NumPad6` now interpolates rotation pitch/yaw/roll with `LerpAngleF(...)`.
+- The follow direction uses NPC velocity when moving, falling back to heading only when velocity is too small.
+
+Expected result:
+
+- `NumPad5` should no longer fail with `could not get top camera`; if direct follow is unavailable, it should report that it is using the static NPC camera fallback.
+- `NumPad6` should still follow the same kind of moving NPC, but camera movement should be less twitchy.
