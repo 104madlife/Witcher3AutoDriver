@@ -576,3 +576,133 @@ Expected result:
 
 - `NumPad5` should no longer fail with `could not get top camera`; if direct follow is unavailable, it should report that it is using the static NPC camera fallback.
 - `NumPad6` should still follow the same kind of moving NPC, but camera movement should be less twitchy.
+
+### 2026-06-02: Official Movement Interface Re-scan
+
+Runtime observation:
+
+- Random nearby NPC camera follow is not stable enough for data capture.
+- Town NPCs usually walk slowly, can stop for long periods, and may despawn when their community/encounter lifecycle ends.
+- This makes "follow a random existing NPC" a useful diagnostic route, but not a good final capture driver.
+
+Important official player movement findings:
+
+- The base game has an official debug helper in `content0\scripts\game\temp.ws` named `MovePlayerFwd(distance, speed, ...)`.
+- `MovePlayerFwd` does not use raw `ActionMoveTo(...)` directly on `thePlayer`.
+- Instead it creates a `CAIMoveToPoint`, fills:
+  - `params.moveSpeed`
+  - `params.destinationHeading`
+  - `params.destinationPosition`
+  - `params.maxIterationsNumber`
+  - `params.moveType`
+- For player movement it wraps that scripted action in `CAIPlayerActionDecorator` and calls `ForceAIBehavior(..., BTAP_Emergency)`.
+- `scenePlayer.ws` uses the same pattern for short scripted player walk actions during scenes.
+- `r4Player.ws` also uses `CAIPlayerActionDecorator` with `CAIFollowSideBySideAction` / `CAIRiderFollowSideBySideAction` to force player or horse follow behavior.
+
+Relevant official classes and files:
+
+```text
+content0\scripts\game\behavior_tree\ai_parameters\actionParams.ws
+  CAIMoveToPoint
+  CAIMoveToPointParams
+  CAIPlayerActionDecorator
+  CAIPlayerRiderActionDecorator
+
+content0\scripts\game\temp.ws
+  exec function MovePlayerFwd(...)
+
+content0\scripts\game\scenes\scenePlayer.ws
+  scripted scene walk actions using CAIMoveToPoint + CAIPlayerActionDecorator
+
+content0\scripts\game\player\r4Player.ws
+  ForceAIBehavior for player follow / rider follow
+```
+
+Important official NPC wander findings:
+
+- Town/community NPC wandering is not just a random `Vector` plus `ActionMoveTo(...)`.
+- Encounter/community setup uses SmartAI initializers:
+  - `CSpawnTreeInitializerSmartWanderAI`
+  - `CSpawnTreeInitializerSmartDynamicWanderAI`
+  - `CSpawnTreeInitializerSmartWanderAndWorkAI`
+- These install AI trees such as:
+  - `CAIWanderWithHistory`
+  - `CAIDynamicWander`
+  - `CAINpcActiveIdle`
+- This likely gives NPCs better integration with navmesh/action points/community areas than AutoDriver's current raw random target loop.
+
+Relevant official NPC files:
+
+```text
+content0\scripts\game\gameplay\encounter\encounterInitializers.ws
+content0\scripts\game\gameplay\encounter\entryGenerators\wanderEntriesGenerator.ws
+content0\scripts\game\gameplay\encounter\entryGenerators\wanderAndWorkEntriesGenerator.ws
+content0\scripts\game\behavior_tree\ai_parameters\npcParams.ws
+```
+
+Important StoryBoardUI route:
+
+- StoryBoardUI provides a Geralt NPC clone template:
+
+```text
+dlc\modtemplates\storyboardui\geralt_npc.w2ent
+```
+
+- `storyboardasset.ws` has working code to:
+  - load this template,
+  - spawn it with `theGame.CreateEntity(...)`,
+  - clone player's equipment to the spawned NPC,
+  - disable collisions,
+  - assign friendly attitude,
+  - force an AI behavior with `ForceAIBehavior(...)`.
+
+Implication:
+
+- A strong next route is to spawn our own persistent Geralt-like NPC clone, then drive that clone with official NPC/player AI actions and attach the AutoDriver camera to it.
+- This avoids two weaknesses of following random city NPCs:
+  - no random despawn/lifecycle loss,
+  - AutoDriver controls speed and destination policy.
+- It also avoids some restrictions of the real player locomotion controller.
+
+Recommended next experiments:
+
+1. Replace or add a player wander test using official `CAIMoveToPoint + CAIPlayerActionDecorator`, modeled after `MovePlayerFwd`.
+2. Add a spawned Geralt NPC clone test using StoryBoardUI's `geralt_npc.w2ent`, then drive that clone with `CAIMoveToPoint` or `CAIDynamicWander`.
+3. Keep `ActionMoveCustomAsync + CMoveTRGScript` as a secondary experiment for continuous steering, because it gives direct per-frame speed/heading goals, but it is less proven on `thePlayer` than the official `CAIMoveToPoint` decorator route.
+
+### 2026-06-02: Official Player Wander And Geralt Clone Experiment
+
+Implemented:
+
+- `NumPad3` still uses `AutoDriver_WalkWander`, but the movement backend was changed.
+- The old `ActionMoveToAsync(...)` call was replaced with an official-style scripted action:
+  - create `CAIMoveToPoint`
+  - set destination, heading, speed, timeout, and move type
+  - wrap with `CAIPlayerActionDecorator`
+  - call `ForceAIBehavior(..., BTAP_Emergency)`
+- This is modeled after the base-game `MovePlayerFwd(...)` debug helper in `content0\scripts\game\temp.ws` and scene movement usage in `scenePlayer.ws`.
+
+Implemented clone experiment:
+
+- `NumPad4` still uses the existing input action name `AutoDriver_DirectWander`, but the actual feature is now Geralt clone wander.
+- It loads StoryBoardUI's template:
+
+```text
+dlc\modtemplates\storyboardui\geralt_npc.w2ent
+```
+
+- It spawns the clone in front of the player, disables collisions, sets a friendly attitude group, and tags it as `AutoDriverClone`.
+- It uses AutoDriver's existing StoryBoardUI static camera path to follow the clone.
+- It drives the clone by repeatedly issuing `CAIMoveToPoint` with `ForceAIBehavior(...)`.
+- The clone is destroyed when the mode stops.
+
+Current binding semantics:
+
+- `NumPad3`: official-style player walk wander.
+- `NumPad4`: Geralt NPC clone wander with static camera follow.
+
+Known risks:
+
+- The clone currently uses StoryBoardUI's template directly, but does not yet clone the player's equipment/appearance the way StoryBoardUI's full `CModStoryBoardActor.cloneFromPlayer(...)` path does.
+- If the template cannot be loaded because StoryBoardUI's DLC resources are not installed or not mounted, `NumPad4` will report a template load failure.
+- `NumPad4` currently uses `CAIMoveToPoint`; `CAIDynamicWander` remains a later experiment if clone movement still sticks too easily.

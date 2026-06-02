@@ -30,6 +30,8 @@ statemachine class CModAutoDriver extends CMod {
     protected var directRetargetInterval: float; default directRetargetInterval = 5.0;
     protected var directStuckTimeout: float; default directStuckTimeout = 2.0;
     protected var directSpeed: float; default directSpeed = 1.0;
+    protected var cloneSpawnDistance: float; default cloneSpawnDistance = 3.0;
+    protected var cloneMoveSpeed: float; default cloneMoveSpeed = 1.0;
     protected var npcSearchRange: float; default npcSearchRange = 60.0;
     protected var npcMinVelocity: float; default npcMinVelocity = 0.2;
     protected var npcCamTickInterval: float; default npcCamTickInterval = 0.05;
@@ -53,6 +55,8 @@ statemachine class CModAutoDriver extends CMod {
     protected var lastDirectProgressAt: float;
     protected var followedNpc: CActor;
     protected var followedNpcSelectedAt: float;
+    protected var followedNpcIsClone: bool;
+    protected var autoClone: CActor;
     protected var npcStaticCam: CStaticCamera;
     protected var npcCameraFollowUsesStaticFallback: bool;
     protected var npcCamSmoothingInitialized: bool;
@@ -69,7 +73,7 @@ statemachine class CModAutoDriver extends CMod {
         theInput.RegisterListener(this, 'OnToggleHorseWander', 'AutoDriver_HorseWander');
 
         GotoState('AutoDriver_Idle');
-        notify("AutoDriver loaded: NumPad3 walk, NumPad4 direct, NumPad5/6 NPC cam, NumPad2 horse");
+        notify("AutoDriver loaded: NumPad3 official walk, NumPad4 clone wander, NumPad5/6 NPC cam, NumPad2 horse");
     }
 
     protected function notify(message: String) {
@@ -85,8 +89,13 @@ statemachine class CModAutoDriver extends CMod {
         resetWalkTarget();
         resetDirectTarget();
         followedNpc = NULL;
+        followedNpcIsClone = false;
         npcCameraFollowUsesStaticFallback = false;
         npcCamSmoothingInitialized = false;
+
+        if (npcStaticCam && npcStaticCam.IsRunning()) {
+            npcStaticCam.Stop();
+        }
 
         mac = thePlayer.GetMovingAgentComponent();
         if (mac) {
@@ -99,6 +108,8 @@ statemachine class CModAutoDriver extends CMod {
                 horse.ActionCancelAll();
             }
         }
+
+        destroyAutoClone();
     }
 
     protected function randomGroundPosition(origin: Vector, minDistance: float, maxDistance: float) : Vector {
@@ -284,7 +295,7 @@ statemachine class CModAutoDriver extends CMod {
         var posAlpha: float;
         var rotAlpha: float;
 
-        if (npcFollowNeedsRetarget()) {
+        if (!followedNpcIsClone && npcFollowNeedsRetarget()) {
             findMovingNpc(npc);
         }
 
@@ -328,6 +339,7 @@ statemachine class CModAutoDriver extends CMod {
 
     protected function stopNpcCamera() {
         followedNpc = NULL;
+        followedNpcIsClone = false;
         npcCameraFollowUsesStaticFallback = false;
         npcCamSmoothingInitialized = false;
 
@@ -339,6 +351,10 @@ statemachine class CModAutoDriver extends CMod {
     }
 
     protected function findSafeWalkTarget(out target : Vector) : bool {
+        return findSafeTargetForActor((CActor)thePlayer, target);
+    }
+
+    protected function findSafeTargetForActor(actor: CActor, out target : Vector) : bool {
         var playerActor: CActor;
         var mac: CMovingAgentComponent;
         var world: CWorld;
@@ -348,7 +364,7 @@ statemachine class CModAutoDriver extends CMod {
         var hasFallback: bool;
         var i: int;
 
-        playerActor = (CActor)thePlayer;
+        playerActor = actor;
         if (!playerActor) {
             return false;
         }
@@ -357,7 +373,7 @@ statemachine class CModAutoDriver extends CMod {
         world = theGame.GetWorld();
 
         for (i = 0; i < walkTargetCandidates; i += 1) {
-            candidate = randomGroundPosition(thePlayer.GetWorldPosition(), minWalkDistance, maxWalkDistance);
+            candidate = randomGroundPosition(playerActor.GetWorldPosition(), minWalkDistance, maxWalkDistance);
 
             if (world.NavigationFindSafeSpot(candidate, walkSafeSpotPersonalSpace, walkSafeSpotSearchRadius, safeCandidate)) {
                 candidate = safeCandidate;
@@ -377,7 +393,7 @@ statemachine class CModAutoDriver extends CMod {
                 return true;
             }
 
-            if (world.NavigationLineTest(thePlayer.GetWorldPosition(), candidate, walkSafeSpotPersonalSpace, false, true)) {
+            if (world.NavigationLineTest(playerActor.GetWorldPosition(), candidate, walkSafeSpotPersonalSpace, false, true)) {
                 target = candidate;
                 return true;
             }
@@ -445,22 +461,19 @@ statemachine class CModAutoDriver extends CMod {
 
     protected function issueWalkMoveAsync() : bool {
         var playerActor: CActor;
-        var result: bool;
 
         playerActor = (CActor)thePlayer;
         if (!playerActor) {
             return false;
         }
 
-        playerActor.ActionCancelAll();
         if (!findSafeWalkTarget(currentWalkTarget)) {
             hasWalkTarget = false;
             log.error("failed to find safe walk target");
             return false;
         }
 
-        result = playerActor.ActionMoveToAsync(currentWalkTarget, MT_Run, walkSpeed, walkArrivalDistance);
-        if (result) {
+        if (issueScriptedMoveToPoint(playerActor, currentWalkTarget, walkSpeed, true)) {
             hasWalkTarget = true;
             walkTargetIssuedAt = theGame.GetEngineTimeAsSeconds();
             lastWalkPosition = thePlayer.GetWorldPosition();
@@ -471,21 +484,84 @@ statemachine class CModAutoDriver extends CMod {
             log.error("failed to issue walk target: " + VecToString(currentWalkTarget));
         }
 
-        return result;
+        return hasWalkTarget;
+    }
+
+    protected function issueScriptedMoveToPoint(actor: CActor, target: Vector, speed: float, decoratePlayer: bool) : bool {
+        var aiTree: CAIMoveToPoint;
+        var decorator: CAIPlayerActionDecorator;
+        var heading: Vector;
+
+        if (!actor) {
+            return false;
+        }
+
+        actor.ActionCancelAll();
+
+        aiTree = new CAIMoveToPoint in actor;
+        aiTree.OnCreated();
+        aiTree.enterExplorationOnStart = false;
+        aiTree.params.moveSpeed = speed;
+        aiTree.params.destinationPosition = target;
+
+        heading = target - actor.GetWorldPosition();
+        heading.Z = 0.0f;
+        if (VecLength(heading) > 0.1f) {
+            aiTree.params.destinationHeading = VecHeading(heading);
+        } else {
+            aiTree.params.destinationHeading = VecHeading(actor.GetHeadingVector());
+        }
+
+        aiTree.params.maxDistance = walkArrivalDistance;
+        aiTree.params.maxIterationsNumber = 1;
+        aiTree.params.useTimeout = true;
+        aiTree.params.timeoutValue = walkTargetTimeout;
+
+        if (speed >= 2.0f) {
+            aiTree.params.moveType = MT_Sprint;
+        } else if (speed >= 1.0f) {
+            aiTree.params.moveType = MT_FastRun;
+        } else {
+            aiTree.params.moveType = MT_Walk;
+        }
+
+        if (decoratePlayer) {
+            thePlayer.GetMovingAgentComponent().SetGameplayMoveDirection(aiTree.params.destinationHeading);
+
+            decorator = new CAIPlayerActionDecorator in actor;
+            decorator.OnCreated();
+            decorator.interruptOnInput = true;
+            decorator.scriptedAction = aiTree;
+
+            if (decorator) {
+                actor.ForceAIBehavior(decorator, BTAP_Emergency);
+            } else {
+                actor.ForceAIBehavior(aiTree, BTAP_Emergency);
+            }
+        } else {
+            actor.ForceAIBehavior(aiTree, BTAP_Emergency);
+        }
+
+        return true;
     }
 
     protected function issueDirectTarget() : bool {
-        if (!findSafeWalkTarget(currentDirectTarget)) {
+        if (!autoClone) {
+            return false;
+        }
+
+        if (!findSafeTargetForActor(autoClone, currentDirectTarget)) {
             hasDirectTarget = false;
-            log.error("failed to find direct target");
+            log.error("failed to find clone target");
             return false;
         }
 
         hasDirectTarget = true;
         directTargetIssuedAt = theGame.GetEngineTimeAsSeconds();
-        lastDirectPosition = thePlayer.GetWorldPosition();
+        lastDirectPosition = autoClone.GetWorldPosition();
         lastDirectProgressAt = directTargetIssuedAt;
-        log.debug("direct target issued: " + VecToString(currentDirectTarget));
+        log.debug("clone target issued: " + VecToString(currentDirectTarget));
+        issueScriptedMoveToPoint(autoClone, currentDirectTarget, cloneMoveSpeed, false);
         return true;
     }
 
@@ -494,7 +570,11 @@ statemachine class CModAutoDriver extends CMod {
             return true;
         }
 
-        if (VecDistance2D(thePlayer.GetWorldPosition(), currentDirectTarget) <= directArrivalDistance) {
+        if (!autoClone) {
+            return true;
+        }
+
+        if (VecDistance2D(autoClone.GetWorldPosition(), currentDirectTarget) <= directArrivalDistance) {
             return true;
         }
 
@@ -508,13 +588,17 @@ statemachine class CModAutoDriver extends CMod {
     protected function updateDirectProgress() {
         var currentPosition: Vector;
 
+        if (!autoClone) {
+            return;
+        }
+
         if (!hasDirectTarget) {
-            lastDirectPosition = thePlayer.GetWorldPosition();
+            lastDirectPosition = autoClone.GetWorldPosition();
             lastDirectProgressAt = theGame.GetEngineTimeAsSeconds();
             return;
         }
 
-        currentPosition = thePlayer.GetWorldPosition();
+        currentPosition = autoClone.GetWorldPosition();
         if (VecDistance2D(currentPosition, lastDirectPosition) >= walkStuckDistance) {
             lastDirectPosition = currentPosition;
             lastDirectProgressAt = theGame.GetEngineTimeAsSeconds();
@@ -529,25 +613,71 @@ statemachine class CModAutoDriver extends CMod {
         return theGame.GetEngineTimeAsSeconds() >= lastDirectProgressAt + directStuckTimeout;
     }
 
-    protected function driveDirectMove() {
-        var mac: CMovingAgentComponent;
-        var direction: Vector;
+    protected function ensureAutoClone() : bool {
+        var template: CEntityTemplate;
+        var entity: CEntity;
+        var spawnPos: Vector;
+        var actor: CActor;
 
-        if (!hasDirectTarget) {
-            return;
+        if (autoClone) {
+            return true;
         }
 
-        mac = thePlayer.GetMovingAgentComponent();
-        if (!mac) {
-            return;
+        template = (CEntityTemplate)LoadResource("dlc\modtemplates\storyboardui\geralt_npc.w2ent", true);
+        if (!template) {
+            notify("AutoDriver could not load StoryBoardUI Geralt clone template");
+            return false;
         }
 
-        direction = currentDirectTarget - thePlayer.GetWorldPosition();
-        direction.Z = 0.0f;
+        spawnPos = thePlayer.GetWorldPosition() + thePlayer.GetHeadingVector() * cloneSpawnDistance;
+        spawnPos = randomGroundPosition(spawnPos, 0.0f, 1.0f);
 
-        mac.SetGameplayRelativeMoveSpeed(directSpeed);
-        mac.SetGameplayMoveDirection(VecHeading(direction));
-        mac.SetDirectionChangeRate(10000.0f);
+        entity = theGame.CreateEntity(template, spawnPos, thePlayer.GetWorldRotation());
+        actor = (CActor)entity;
+        if (!actor) {
+            notify("AutoDriver could not create Geralt NPC clone");
+            return false;
+        }
+
+        actor.EnableCharacterCollisions(false);
+        actor.EnableCollisions(false);
+        actor.SetTemporaryAttitudeGroup('q104_avallach_friendly_to_all', AGP_Default);
+        actor.AddTag('AutoDriverClone');
+
+        autoClone = actor;
+        followedNpc = actor;
+        followedNpcIsClone = true;
+        followedNpcSelectedAt = theGame.GetEngineTimeAsSeconds();
+        npcCamSmoothingInitialized = false;
+
+        return true;
+    }
+
+    protected function startCloneWander() : bool {
+        if (!ensureAutoClone()) {
+            return false;
+        }
+
+        if (!ensureStaticNpcCamera()) {
+            return false;
+        }
+
+        followedNpc = autoClone;
+        followedNpcIsClone = true;
+        npcStaticCam.Run();
+        updateStaticCameraPlacement();
+        notify("AutoDriver Geralt clone wander started");
+        return true;
+    }
+
+    protected function destroyAutoClone() {
+        if (autoClone) {
+            autoClone.ActionCancelAll();
+            autoClone.Destroy();
+            autoClone = NULL;
+        }
+
+        followedNpcIsClone = false;
     }
 
     protected latent function moveActorRandom(
@@ -597,7 +727,7 @@ statemachine class CModAutoDriver extends CMod {
             if (GetCurrentStateName() == 'AutoDriver_DirectWander') {
                 stopCurrentAction();
                 GotoState('AutoDriver_Idle');
-                notify("AutoDriver direct wander stopped");
+                notify("AutoDriver Geralt clone wander stopped");
             } else {
                 stopCurrentAction();
                 GotoState('AutoDriver_DirectWander');
@@ -684,7 +814,10 @@ state AutoDriver_DirectWander in CModAutoDriver {
     event OnEnterState(prevStateName: CName) {
         super.OnEnterState(prevStateName);
         parent.resetDirectTarget();
-        parent.notify("AutoDriver direct wander started");
+        if (!parent.startCloneWander()) {
+            parent.GotoState('AutoDriver_Idle');
+            return;
+        }
         DirectLoop();
     }
 
@@ -696,7 +829,7 @@ state AutoDriver_DirectWander in CModAutoDriver {
     entry function DirectLoop() {
         while (parent.GetCurrentStateName() == 'AutoDriver_DirectWander') {
             if (thePlayer.IsUsingHorse(true)) {
-                parent.notify("AutoDriver direct wander requires dismounted player");
+                parent.notify("AutoDriver clone wander requires dismounted player");
                 parent.GotoState('AutoDriver_Idle');
                 return;
             }
@@ -707,8 +840,8 @@ state AutoDriver_DirectWander in CModAutoDriver {
                 parent.issueDirectTarget();
             }
 
-            parent.driveDirectMove();
-            Sleep(parent.directTickInterval);
+            parent.updateStaticCameraPlacement();
+            Sleep(parent.walkTickInterval);
         }
     }
 }
