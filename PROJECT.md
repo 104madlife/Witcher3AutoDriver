@@ -787,3 +787,68 @@ Risks:
 
 - `ActionMoveCustomAsync(...)` may still be blocked or overwritten by the real player exploration controller.
 - `CMoveTRGScript` compiles in base game behavior-tree tasks, but this is AutoDriver's first custom top-level targeter, so syntax or engine ownership issues may appear during game script compilation.
+
+### 2026-07-12: God Mode And Teleport Initial Implementation
+
+Development plan:
+
+```text
+GOD_TELEPORT_DEVELOPMENT_PLAN.md
+```
+
+Implemented bindings:
+
+- `NumPad7`: `AutoDriver_GodMode`
+- `NumPad8`: `AutoDriver_OfficialTeleport`
+- `NumPad9`: `AutoDriver_RandomXYTeleport`
+
+`NumPad7` implementation:
+
+- Toggles `AIM_Invulnerable` on AutoDriver's `AIC_Default` channel.
+- Does not enable unlimited stamina, global negative-buff immunity, or hit-animation suppression.
+- Runs an independent repeating timer every `0.25` seconds.
+- The timer fills `BCS_Air` to its current maximum and removes `EET_Drowning` if present.
+- Disabling the mode removes the timer and restores `AIM_None` on `AIC_Default`.
+
+`NumPad8` implementation:
+
+- Uses `GetFastTravelPoints(false, false, false, false, false)` with no filtering.
+- Traverses the complete returned list sequentially.
+- Stores the next list index in the persistent fact:
+
+```text
+autodriver_official_teleport_index
+```
+
+- Uses each pin's type to resolve either a `RoadSign` or `Harbor` teleport waypoint.
+- Uses `TeleportWithRotation(...)` for destinations in the current world.
+- Uses `ScheduleWorldChangeToPosition(...)` for resolved cross-world destinations.
+- Uses `ScheduleWorldChangeToMapPin(...)` as the official cross-world fallback when position lookup fails.
+- Logs index, total, tag, type, area, world path, resolution state, and destination position.
+- Refuses teleport during combat, gameplay/non-gameplay scenes, horse riding, sailing, or boat use.
+
+`NumPad9` implementation:
+
+- Remains in the current world.
+- Selects a random current-world `RoadSign` as a safe anchor.
+- Teleports to the anchor and waits `2.0` seconds for streaming/navigation data.
+- Generates up to `20` random candidates between `20` and `100` units from the anchor.
+- Validates with `NavigationFindSafeSpot`, `NavigationComputeZ`, a second `NavigationFindSafeSpot`, moving-agent `IsPositionValid`, and optional `PhysicsCorrectZ`.
+- Does not brute-force a failed destination; the player remains at the safe anchor if validation fails.
+- Uses a dedicated temporary state to reject repeated input while the two-stage teleport is running.
+
+Input files updated:
+
+```text
+AutoDriver.input.settings
+modAutoDriver.input.settings
+C:\Users\64617\Documents\The Witcher 3\input.settings
+```
+
+Pending validation:
+
+- WitcherScript compilation in game.
+- God-mode damage and long-duration diving behavior.
+- Sequential cursor persistence after cross-world loading.
+- Harbor destination safety while on foot.
+- Random XY behavior across major worlds and terrain types.

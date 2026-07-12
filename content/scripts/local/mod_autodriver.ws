@@ -77,6 +77,16 @@ statemachine class CModAutoDriver extends CMod {
     protected var npcStaticCamFov: float; default npcStaticCamFov = 70.0f;
     protected var npcCamPositionSmooth: float; default npcCamPositionSmooth = 5.0f;
     protected var npcCamRotationSmooth: float; default npcCamRotationSmooth = 7.0f;
+    protected var godOxygenTickInterval: float; default godOxygenTickInterval = 0.25f;
+    protected var randomTeleportMinRadius: float; default randomTeleportMinRadius = 20.0f;
+    protected var randomTeleportMaxRadius: float; default randomTeleportMaxRadius = 100.0f;
+    protected var randomTeleportSafeRadius: float; default randomTeleportSafeRadius = 6.0f;
+    protected var randomTeleportPersonalSpace: float; default randomTeleportPersonalSpace = 1.0f;
+    protected var randomTeleportZRange: float; default randomTeleportZRange = 20.0f;
+    protected var randomTeleportMaxVerticalDelta: float; default randomTeleportMaxVerticalDelta = 50.0f;
+    protected var randomTeleportStreamingDelay: float; default randomTeleportStreamingDelay = 2.0f;
+    protected var randomTeleportAttempts: int; default randomTeleportAttempts = 20;
+    protected var godModeEnabled: bool;
 
     protected var hasWalkTarget: bool;
     protected var currentWalkTarget: Vector;
@@ -116,16 +126,329 @@ statemachine class CModAutoDriver extends CMod {
         theInput.RegisterListener(this, 'OnToggleCameraFollowNpc', 'AutoDriver_CameraFollowNpc');
         theInput.RegisterListener(this, 'OnToggleStaticCameraFollowNpc', 'AutoDriver_StaticCameraFollowNpc');
         theInput.RegisterListener(this, 'OnToggleHorseWander', 'AutoDriver_HorseWander');
-        theInput.RegisterListener(this, 'OnToggleTunedMovePointWander', 'AutoDriver_TunedMovePointWander');
-        theInput.RegisterListener(this, 'OnToggleCustomSeekWander', 'AutoDriver_CustomSeekWander');
+        theInput.RegisterListener(this, 'OnToggleGodMode', 'AutoDriver_GodMode');
+        theInput.RegisterListener(this, 'OnOfficialTeleport', 'AutoDriver_OfficialTeleport');
+        theInput.RegisterListener(this, 'OnRandomXYTeleport', 'AutoDriver_RandomXYTeleport');
 
         GotoState('AutoDriver_Idle');
-        notify("AutoDriver loaded: NumPad3 walk, NumPad4 clone, NumPad7 tuned move, NumPad8 custom seek");
+        notify("AutoDriver loaded: NumPad7 god, NumPad8 official teleport, NumPad9 random XY");
     }
 
     protected function notify(message: String) {
         GetWitcherPlayer().DisplayHudMessage(message);
         log.info(message);
+    }
+
+    protected function enableGodMode() {
+        godModeEnabled = true;
+        thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Default, true);
+        maintainGodModeOxygen();
+        RemoveTimer('AutoDriverGodOxygenTick');
+        AddTimer('AutoDriverGodOxygenTick', godOxygenTickInterval, true);
+        notify("AutoDriver god mode ON: no health damage, unlimited oxygen");
+    }
+
+    protected function disableGodMode() {
+        godModeEnabled = false;
+        RemoveTimer('AutoDriverGodOxygenTick');
+        thePlayer.SetImmortalityMode(AIM_None, AIC_Default, true);
+        notify("AutoDriver god mode OFF");
+    }
+
+    protected function maintainGodModeOxygen() {
+        if (!godModeEnabled || !thePlayer) {
+            return;
+        }
+
+        thePlayer.ForceSetStat(BCS_Air, thePlayer.GetStatMax(BCS_Air));
+        if (thePlayer.HasBuff(EET_Drowning)) {
+            thePlayer.RemoveBuff(EET_Drowning);
+        }
+    }
+
+    timer function AutoDriverGodOxygenTick(deltaTime: float, id: int) {
+        maintainGodModeOxygen();
+    }
+
+    protected function canUseTeleport(out reason: String) : bool {
+        if (!thePlayer) {
+            reason = "player unavailable";
+            return false;
+        }
+
+        if (thePlayer.IsInCombat()) {
+            reason = "player is in combat";
+            return false;
+        }
+
+        if (thePlayer.IsInGameplayScene() || theGame.IsCurrentlyPlayingNonGameplayScene()) {
+            reason = "a story scene is active";
+            return false;
+        }
+
+        if (thePlayer.IsUsingHorse(true)) {
+            reason = "dismount horse first";
+            return false;
+        }
+
+        if (thePlayer.IsSailing() || thePlayer.IsUsingBoat()) {
+            reason = "leave the boat first";
+            return false;
+        }
+
+        return true;
+    }
+
+    protected function formatFastTravelPin(pin: SAvailableFastTravelMapPin, index: int, total: int) : String {
+        return IntToString(index + 1) + "/" + IntToString(total)
+            + " tag=" + NameToString(pin.tag)
+            + " type=" + NameToString(pin.type)
+            + " area=" + pin.area;
+    }
+
+    protected function performOfficialTeleport() : bool {
+        var manager: CCommonMapManager;
+        var pins: array<SAvailableFastTravelMapPin>;
+        var pin: SAvailableFastTravelMapPin;
+        var index: int;
+        var nextIndex: int;
+        var worldPath: String;
+        var currentWorldPath: String;
+        var position: Vector;
+        var rotation: EulerAngles;
+        var positionResolved: bool;
+        var landPoint: bool;
+        var details: String;
+        var reason: String;
+
+        if (!canUseTeleport(reason)) {
+            notify("AutoDriver teleport blocked: " + reason);
+            return false;
+        }
+
+        manager = theGame.GetCommonMapManager();
+        pins = manager.GetFastTravelPoints(false, false, false, false, false);
+        if (pins.Size() == 0) {
+            notify("AutoDriver official teleport list is empty");
+            return false;
+        }
+
+        index = FactsQuerySum("autodriver_official_teleport_index");
+        if (index < 0 || index >= pins.Size()) {
+            index = 0;
+        }
+
+        pin = pins[index];
+        details = formatFastTravelPin(pin, index, pins.Size());
+        worldPath = manager.GetWorldPathFromAreaType(pin.area);
+        currentWorldPath = theGame.GetWorld().GetDepotPath();
+        landPoint = pin.type == 'RoadSign';
+
+        if (StrLen(worldPath) == 0) {
+            notify("AutoDriver unknown teleport world: " + details);
+            log.error("official teleport failed: " + details + " worldPath=<empty>");
+            return false;
+        }
+
+        positionResolved = manager.GetFastTravelPointPosition(worldPath, pin.tag, landPoint, position, rotation);
+        nextIndex = index + 1;
+        if (nextIndex >= pins.Size()) {
+            nextIndex = 0;
+        }
+
+        stopCurrentAction();
+        rotation.Pitch = 0.0f;
+        rotation.Roll = 0.0f;
+
+        if (worldPath == currentWorldPath) {
+            if (!positionResolved) {
+                notify("AutoDriver local teleport position failed: " + details);
+                log.error("official teleport local failed: " + details + " worldPath=" + worldPath);
+                return false;
+            }
+
+            FactsSet("autodriver_official_teleport_index", nextIndex, -1);
+            log.info("official teleport local: " + details + " worldPath=" + worldPath
+                + " position=" + VecToString(position) + " resolved=true issued=true");
+            notify("AutoDriver official teleport: " + details);
+            thePlayer.TeleportWithRotation(position, rotation);
+            return true;
+        }
+
+        FactsSet("autodriver_official_teleport_index", nextIndex, -1);
+        if (positionResolved) {
+            log.info("official teleport global: " + details + " worldPath=" + worldPath
+                + " position=" + VecToString(position) + " resolved=true issued=true");
+            notify("AutoDriver cross-world teleport: " + details);
+            theGame.ScheduleWorldChangeToPosition(worldPath, position, rotation);
+        } else {
+            log.info("official teleport global fallback: " + details + " worldPath=" + worldPath
+                + " resolved=false issued=true");
+            notify("AutoDriver cross-world map-pin fallback: " + details);
+            theGame.ScheduleWorldChangeToMapPin(worldPath, pin.tag);
+        }
+
+        return true;
+    }
+
+    protected function getCurrentWorldRoadSignAnchors(out anchors: array<SAvailableFastTravelMapPin>) : bool {
+        var manager: CCommonMapManager;
+        var pins: array<SAvailableFastTravelMapPin>;
+        var currentWorldPath: String;
+        var pinWorldPath: String;
+        var i: int;
+
+        manager = theGame.GetCommonMapManager();
+        pins = manager.GetFastTravelPoints(false, false, false, false, false);
+        currentWorldPath = theGame.GetWorld().GetDepotPath();
+
+        for (i = 0; i < pins.Size(); i += 1) {
+            if (pins[i].type != 'RoadSign') {
+                continue;
+            }
+
+            pinWorldPath = manager.GetWorldPathFromAreaType(pins[i].area);
+            if (pinWorldPath == currentWorldPath) {
+                anchors.PushBack(pins[i]);
+            }
+        }
+
+        return anchors.Size() > 0;
+    }
+
+    protected function findRandomSafeTeleportPosition(anchor: Vector, out target: Vector) : bool {
+        var world: CWorld;
+        var mac: CMovingAgentComponent;
+        var candidate: Vector;
+        var safePosition: Vector;
+        var correctedPosition: Vector;
+        var correctedZ: float;
+        var physicsZ: float;
+        var i: int;
+
+        world = theGame.GetWorld();
+        mac = thePlayer.GetMovingAgentComponent();
+        if (!world || !mac) {
+            return false;
+        }
+
+        for (i = 0; i < randomTeleportAttempts; i += 1) {
+            candidate = anchor + VecRingRand(randomTeleportMinRadius, randomTeleportMaxRadius);
+            candidate.Z = anchor.Z;
+
+            if (!world.NavigationFindSafeSpot(
+                candidate,
+                randomTeleportPersonalSpace,
+                randomTeleportSafeRadius,
+                safePosition
+            )) {
+                continue;
+            }
+
+            if (!world.NavigationComputeZ(
+                safePosition,
+                anchor.Z - randomTeleportZRange,
+                anchor.Z + randomTeleportZRange,
+                correctedZ
+            )) {
+                continue;
+            }
+
+            safePosition.Z = correctedZ;
+            if (!world.NavigationFindSafeSpot(
+                safePosition,
+                randomTeleportPersonalSpace,
+                randomTeleportSafeRadius,
+                correctedPosition
+            )) {
+                continue;
+            }
+
+            if (AbsF(correctedPosition.Z - anchor.Z) > randomTeleportMaxVerticalDelta) {
+                continue;
+            }
+
+            if (!mac.IsPositionValid(correctedPosition)) {
+                continue;
+            }
+
+            if (world.PhysicsCorrectZ(correctedPosition, physicsZ)) {
+                correctedPosition.Z = physicsZ;
+                if (!mac.IsPositionValid(correctedPosition)) {
+                    continue;
+                }
+            }
+
+            target = correctedPosition;
+            return true;
+        }
+
+        return false;
+    }
+
+    protected latent function performRandomXYTeleport() : bool {
+        var manager: CCommonMapManager;
+        var anchors: array<SAvailableFastTravelMapPin>;
+        var anchorPin: SAvailableFastTravelMapPin;
+        var anchorIndex: int;
+        var currentWorldPath: String;
+        var anchorPosition: Vector;
+        var targetPosition: Vector;
+        var rotation: EulerAngles;
+        var reason: String;
+        var result: bool;
+
+        if (!canUseTeleport(reason)) {
+            notify("AutoDriver random teleport blocked: " + reason);
+            return false;
+        }
+
+        if (!getCurrentWorldRoadSignAnchors(anchors)) {
+            notify("AutoDriver found no current-world RoadSign anchor");
+            return false;
+        }
+
+        manager = theGame.GetCommonMapManager();
+        currentWorldPath = theGame.GetWorld().GetDepotPath();
+        anchorIndex = RandRange(anchors.Size());
+        anchorPin = anchors[anchorIndex];
+
+        if (!manager.GetFastTravelPointPosition(
+            currentWorldPath,
+            anchorPin.tag,
+            true,
+            anchorPosition,
+            rotation
+        )) {
+            notify("AutoDriver failed to resolve random anchor " + NameToString(anchorPin.tag));
+            return false;
+        }
+
+        stopCurrentAction();
+        rotation.Pitch = 0.0f;
+        rotation.Roll = 0.0f;
+        notify("AutoDriver random XY anchor: " + NameToString(anchorPin.tag));
+        log.info("random XY anchor tag=" + NameToString(anchorPin.tag)
+            + " position=" + VecToString(anchorPosition));
+        thePlayer.TeleportWithRotation(anchorPosition, rotation);
+
+        Sleep(randomTeleportStreamingDelay);
+
+        if (!findRandomSafeTeleportPosition(anchorPosition, targetPosition)) {
+            notify("AutoDriver random XY validation failed; staying at safe anchor");
+            log.error("random XY failed around anchor=" + NameToString(anchorPin.tag));
+            return false;
+        }
+
+        rotation = thePlayer.GetWorldRotation();
+        rotation.Pitch = 0.0f;
+        rotation.Roll = 0.0f;
+        thePlayer.TeleportWithRotation(targetPosition, rotation);
+        notify("AutoDriver random XY teleport complete");
+        log.info("random XY success anchor=" + NameToString(anchorPin.tag)
+            + " target=" + VecToString(targetPosition));
+        result = true;
+        return result;
     }
 
     protected function stopCurrentAction() {
@@ -1006,28 +1329,29 @@ statemachine class CModAutoDriver extends CMod {
         }
     }
 
-    event OnToggleTunedMovePointWander(action: SInputAction) {
+    event OnToggleGodMode(action: SInputAction) {
         if (IsPressed(action)) {
-            if (GetCurrentStateName() == 'AutoDriver_TunedMovePointWander') {
-                stopCurrentAction();
-                GotoState('AutoDriver_Idle');
-                notify("AutoDriver tuned move point wander stopped");
+            if (godModeEnabled) {
+                disableGodMode();
             } else {
-                stopCurrentAction();
-                GotoState('AutoDriver_TunedMovePointWander');
+                enableGodMode();
             }
         }
     }
 
-    event OnToggleCustomSeekWander(action: SInputAction) {
+    event OnOfficialTeleport(action: SInputAction) {
         if (IsPressed(action)) {
-            if (GetCurrentStateName() == 'AutoDriver_CustomSeekWander') {
-                stopCurrentAction();
-                GotoState('AutoDriver_Idle');
-                notify("AutoDriver custom seek wander stopped");
+            performOfficialTeleport();
+        }
+    }
+
+    event OnRandomXYTeleport(action: SInputAction) {
+        if (IsPressed(action)) {
+            if (GetCurrentStateName() == 'AutoDriver_RandomXYTeleport') {
+                notify("AutoDriver random XY teleport is already running");
             } else {
                 stopCurrentAction();
-                GotoState('AutoDriver_CustomSeekWander');
+                GotoState('AutoDriver_RandomXYTeleport');
             }
         }
     }
@@ -1205,6 +1529,22 @@ state AutoDriver_CustomSeekWander in CModAutoDriver {
 
             Sleep(parent.customSeekTickInterval);
         }
+    }
+}
+
+state AutoDriver_RandomXYTeleport in CModAutoDriver {
+    event OnEnterState(prevStateName: CName) {
+        super.OnEnterState(prevStateName);
+        RandomXYTeleportLoop();
+    }
+
+    event OnLeaveState(nextStateName: CName) {
+        super.OnLeaveState(nextStateName);
+    }
+
+    entry function RandomXYTeleportLoop() {
+        parent.performRandomXYTeleport();
+        parent.GotoState('AutoDriver_Idle');
     }
 }
 
