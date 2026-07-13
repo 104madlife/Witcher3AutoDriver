@@ -88,6 +88,8 @@ statemachine class CModAutoDriver extends CMod {
     protected var randomTeleportAttempts: int; default randomTeleportAttempts = 20;
     protected var horseTransitionTimeout: float; default horseTransitionTimeout = 5.0f;
     protected var horseTransitionPollInterval: float; default horseTransitionPollInterval = 0.05f;
+    protected var horseSummonTimeout: float; default horseSummonTimeout = 10.0f;
+    protected var horseImmediateMountMaxDistance: float; default horseImmediateMountMaxDistance = 20.0f;
     protected var godModeEnabled: bool;
 
     protected var hasWalkTarget: bool;
@@ -269,12 +271,37 @@ statemachine class CModAutoDriver extends CMod {
         return horse;
     }
 
+    protected function isPlayerHorseReadyToMount(horse: CNewNPC) : bool {
+        if (!horse || !horse.IsAlive()) {
+            return false;
+        }
+
+        return VecDistanceSquared(thePlayer.GetWorldPosition(), horse.GetWorldPosition())
+            <= horseImmediateMountMaxDistance * horseImmediateMountMaxDistance;
+    }
+
+    protected latent function waitForNearbyPlayerHorse(out horse: CNewNPC) : bool {
+        var timeoutAt: float;
+
+        timeoutAt = theGame.GetEngineTimeAsSeconds() + horseSummonTimeout;
+        while (theGame.GetEngineTimeAsSeconds() < timeoutAt) {
+            horse = thePlayer.GetHorseWithInventory();
+            if (isPlayerHorseReadyToMount(horse)) {
+                return true;
+            }
+
+            Sleep(horseTransitionPollInterval);
+        }
+
+        return false;
+    }
+
     protected latent function performHorseToggle() : bool {
         var riderData: CAIStorageRiderData;
         var horse: CNewNPC;
-        var createEntityHelper: CR4CreateEntityHelper;
         var status: EVehicleMountStatus;
         var completed: bool;
+        var horseReady: bool;
 
         if (!thePlayer || theGame.IsDialogOrCutscenePlaying()
             || theGame.IsFading() || theGame.IsBlackscreen()) {
@@ -331,15 +358,20 @@ statemachine class CModAutoDriver extends CMod {
         }
 
         horse = thePlayer.GetHorseWithInventory();
-        notify("AutoDriver mounting horse");
-        if (!horse || !horse.IsAlive()) {
-            createEntityHelper = new CR4CreateEntityHelper in thePlayer;
-            createEntityHelper.SetPostAttachedCallback(thePlayer, 'OnInstantMountVehicle');
-            theGame.SummonPlayerHorse(false, createEntityHelper);
-        } else {
-            thePlayer.MountVehicle(horse, VMT_ImmediateUse, EVS_driver_slot);
+        horseReady = isPlayerHorseReadyToMount(horse);
+        if (!horseReady) {
+            notify("AutoDriver calling nearby horse");
+            theGame.OnSpawnPlayerHorse();
+            horseReady = waitForNearbyPlayerHorse(horse);
         }
 
+        if (!horseReady) {
+            notify("AutoDriver horse summon timed out");
+            return false;
+        }
+
+        notify("AutoDriver mounting horse");
+        thePlayer.MountVehicle(horse, VMT_ImmediateUse, EVS_driver_slot);
         completed = waitForHorseStatus(VMS_mounted);
         if (completed) {
             notify("AutoDriver horse mount complete");

@@ -16,6 +16,8 @@ This phase replaces the current experimental meanings of `NumPad7` and `NumPad8`
 
 `NumPad6` is additionally assigned to an official-style horse mount/dismount toggle. `NumPad8` and `NumPad9` automatically perform and confirm an instant dismount before teleporting when the player is mounted.
 
+The horse toggle treats the persistent horse handle and a nearby mountable horse as different states. Immediate mounting is allowed only within `20` units. Otherwise it calls the official `OnSpawnPlayerHorse()` flow and waits up to `10` seconds for Roach to spawn or approach, preventing attachment to a remote persistent horse.
+
 The old `NumPad7` tuned-move experiment and `NumPad8` custom-seek experiment will no longer be bound to those keys. Their code may remain temporarily for comparison, but must not run from the new bindings.
 
 ## 2. Confirmed Base-Game Interfaces

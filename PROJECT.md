@@ -875,7 +875,8 @@ Pending validation:
 
 - Mounted players use `DismountVehicle(horse, DT_instant)`.
 - If the player horse exists and is alive, mounting uses `MountVehicle(horse, VMT_ImmediateUse, EVS_driver_slot)`.
-- If the player horse is absent or dead, AutoDriver mirrors the official `InstantMountPlayer` quest flow with `SummonPlayerHorse(false, helper)` and the player's `OnInstantMountVehicle` post-attach callback.
+- AutoDriver mounts immediately only when the persistent player horse is alive and within `20` units of the player.
+- If the horse is absent, dead, or farther away, AutoDriver calls the official `theGame.OnSpawnPlayerHorse()` flow and waits up to `10` seconds for an alive player horse to enter mounting range.
 - Completion is confirmed by `GetRidingManagerCurrentTask() == RMT_None` plus `VMS_mounted` or `VMS_dismounted`, with a five-second timeout.
 
 Mounted teleport behavior:
@@ -885,3 +886,7 @@ Mounted teleport behavior:
 - A mounted player is dismounted with `DT_instant`; teleport starts only after the riding manager reports `VMS_dismounted`.
 - Mount-in-progress, timeout, combat, story-scene, and boat restrictions still cancel teleport safely.
 - `AutoDriver_ToggleHorse`, `AutoDriver_OfficialTeleport`, and `AutoDriver_RandomXYTeleport` are mapped in both exploration and horse input contexts.
+
+### Horse-toggle XY relocation correction
+
+The persistent `GetHorseWithInventory()` handle can remain valid while Roach is far outside the local area. Calling `VMT_ImmediateUse` on that remote entity moves the player to its mount slot, which appeared as a repeatable XY teleport. The distance gate and official recall flow prevent immediate mounting of a remote persistent horse. A limited position adjustment of up to the configured mounting range remains acceptable for the prototype.
