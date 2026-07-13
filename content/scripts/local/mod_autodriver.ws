@@ -143,14 +143,11 @@ statemachine class CModAutoDriver extends CMod {
         godModeEnabled = true;
         thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Default, true);
         maintainGodModeOxygen();
-        RemoveTimer('AutoDriverGodOxygenTick');
-        AddTimer('AutoDriverGodOxygenTick', godOxygenTickInterval, true);
-        notify("AutoDriver god mode ON: no health damage, unlimited oxygen");
+        notify("AutoDriver god mode ON: no health damage, oxygen refilled");
     }
 
     protected function disableGodMode() {
         godModeEnabled = false;
-        RemoveTimer('AutoDriverGodOxygenTick');
         thePlayer.SetImmortalityMode(AIM_None, AIC_Default, true);
         notify("AutoDriver god mode OFF");
     }
@@ -164,10 +161,6 @@ statemachine class CModAutoDriver extends CMod {
         if (thePlayer.HasBuff(EET_Drowning)) {
             thePlayer.RemoveBuff(EET_Drowning);
         }
-    }
-
-    timer function AutoDriverGodOxygenTick(deltaTime: float, id: int) {
-        maintainGodModeOxygen();
     }
 
     protected function canUseTeleport(out reason: String) : bool {

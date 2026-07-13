@@ -852,3 +852,10 @@ Pending validation:
 - Sequential cursor persistence after cross-world loading.
 - Harbor destination safety while on foot.
 - Random XY behavior across major worlds and terrain types.
+# 2026-07-13: Timer API ownership correction
+
+- `AddTimer` and `RemoveTimer` are `CEntity` methods, not global functions.
+- `CModAutoDriver extends CMod extends IScriptable`, so direct timer calls in the mod class do not compile.
+- StoryBoardUI's direct timer calls occur in entity-derived classes and cannot be copied into `CModAutoDriver` without preserving that ownership model.
+- Calling `thePlayer.AddTimer` is not a drop-in fix because the timer callback must exist on the timer-owning entity.
+- The invalid oxygen maintenance timer was removed to restore compilation. Health invulnerability still protects against drowning damage; persistent oxygen replenishment needs a verified entity helper or effect-layer implementation.
