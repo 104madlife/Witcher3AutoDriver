@@ -90,6 +90,9 @@ statemachine class CModAutoDriver extends CMod {
     protected var horseTransitionPollInterval: float; default horseTransitionPollInterval = 0.05f;
     protected var horseSummonTimeout: float; default horseSummonTimeout = 10.0f;
     protected var horseImmediateMountMaxDistance: float; default horseImmediateMountMaxDistance = 20.0f;
+    protected var teleportVerificationDelay: float; default teleportVerificationDelay = 0.15f;
+    protected var teleportVerificationAttempts: int; default teleportVerificationAttempts = 3;
+    protected var teleportArrivalTolerance: float; default teleportArrivalTolerance = 5.0f;
     protected var godModeEnabled: bool;
 
     protected var hasWalkTarget: bool;
@@ -388,9 +391,14 @@ statemachine class CModAutoDriver extends CMod {
         var completed: bool;
         var allowed: bool;
 
-        allowed = canUseTeleport(reason, true);
+        allowed = canUseTeleport(reason);
         if (!allowed) {
             return false;
+        }
+
+        horse = getCurrentHorseEntity();
+        if (!horse) {
+            return true;
         }
 
         riderData = thePlayer.GetRiderData();
@@ -406,12 +414,6 @@ statemachine class CModAutoDriver extends CMod {
         }
 
         if (status == VMS_mounted) {
-            horse = getCurrentHorseEntity();
-            if (!horse) {
-                reason = "mounted horse unavailable";
-                return false;
-            }
-
             notify("AutoDriver teleport: dismounting horse first");
             thePlayer.DismountVehicle(horse, DT_instant);
         }
@@ -424,20 +426,13 @@ statemachine class CModAutoDriver extends CMod {
             }
         }
 
-        allowed = canUseTeleport(reason, false);
+        allowed = canUseTeleport(reason);
         return allowed;
     }
 
-    protected function canUseTeleport(out reason: String, optional allowMountedHorse: bool) : bool {
-        var riderData: CAIStorageRiderData;
-
+    protected function canUseTeleport(out reason: String) : bool {
         if (!thePlayer) {
             reason = "player unavailable";
-            return false;
-        }
-
-        if (thePlayer.IsInCombat()) {
-            reason = "player is in combat";
             return false;
         }
 
@@ -446,19 +441,36 @@ statemachine class CModAutoDriver extends CMod {
             return false;
         }
 
-        riderData = thePlayer.GetRiderData();
-        if (!allowMountedHorse && riderData
-            && riderData.sharedParams.mountStatus != VMS_dismounted) {
-            reason = "dismount horse first";
-            return false;
-        }
-
-        if (thePlayer.IsSailing() || thePlayer.IsUsingBoat()) {
-            reason = "leave the boat first";
-            return false;
-        }
-
         return true;
+    }
+
+    protected latent function teleportPlayerAndVerify(
+        position: Vector,
+        rotation: EulerAngles,
+        operation: String
+    ) : bool {
+        var attempt: int;
+        var toleranceSquared: float;
+        var distanceSquared: float;
+
+        toleranceSquared = teleportArrivalTolerance * teleportArrivalTolerance;
+        for (attempt = 0; attempt < teleportVerificationAttempts; attempt += 1) {
+            thePlayer.TeleportWithRotation(position, rotation);
+            Sleep(teleportVerificationDelay);
+
+            distanceSquared = VecDistanceSquared(thePlayer.GetWorldPosition(), position);
+            if (distanceSquared <= toleranceSquared) {
+                return true;
+            }
+
+            log.debug(operation + " retry=" + IntToString(attempt + 1)
+                + " distanceSquared=" + FloatToString(distanceSquared));
+        }
+
+        log.error(operation + " position verification failed target=" + VecToString(position)
+            + " actual=" + VecToString(thePlayer.GetWorldPosition())
+            + " distanceSquared=" + FloatToString(distanceSquared));
+        return false;
     }
 
     protected function formatFastTravelPin(pin: SAvailableFastTravelMapPin, index: int, total: int) : String {
@@ -468,7 +480,7 @@ statemachine class CModAutoDriver extends CMod {
             + " area=" + pin.area;
     }
 
-    protected function performOfficialTeleport() : bool {
+    protected latent function performOfficialTeleport() : bool {
         var manager: CCommonMapManager;
         var pins: array<SAvailableFastTravelMapPin>;
         var pin: SAvailableFastTravelMapPin;
@@ -482,6 +494,7 @@ statemachine class CModAutoDriver extends CMod {
         var landPoint: bool;
         var details: String;
         var reason: String;
+        var teleported: bool;
 
         if (!canUseTeleport(reason)) {
             notify("AutoDriver teleport blocked: " + reason);
@@ -518,7 +531,6 @@ statemachine class CModAutoDriver extends CMod {
             nextIndex = 0;
         }
 
-        stopCurrentAction();
         rotation.Pitch = 0.0f;
         rotation.Roll = 0.0f;
 
@@ -533,8 +545,12 @@ statemachine class CModAutoDriver extends CMod {
             log.info("official teleport local: " + details + " worldPath=" + worldPath
                 + " position=" + VecToString(position) + " resolved=true issued=true");
             notify("AutoDriver official teleport: " + details);
-            thePlayer.TeleportWithRotation(position, rotation);
-            return true;
+            teleported = teleportPlayerAndVerify(position, rotation, "official local teleport");
+            if (!teleported) {
+                notify("AutoDriver local teleport was overridden by current player state");
+                return false;
+            }
+            return teleported;
         }
 
         FactsSet("autodriver_official_teleport_index", nextIndex, -1);
@@ -688,13 +704,16 @@ statemachine class CModAutoDriver extends CMod {
             return false;
         }
 
-        stopCurrentAction();
         rotation.Pitch = 0.0f;
         rotation.Roll = 0.0f;
         notify("AutoDriver random XY anchor: " + NameToString(anchorPin.tag));
         log.info("random XY anchor tag=" + NameToString(anchorPin.tag)
             + " position=" + VecToString(anchorPosition));
-        thePlayer.TeleportWithRotation(anchorPosition, rotation);
+        result = teleportPlayerAndVerify(anchorPosition, rotation, "random XY anchor teleport");
+        if (!result) {
+            notify("AutoDriver random anchor teleport was overridden by current player state");
+            return false;
+        }
 
         Sleep(randomTeleportStreamingDelay);
 
@@ -707,19 +726,18 @@ statemachine class CModAutoDriver extends CMod {
         rotation = thePlayer.GetWorldRotation();
         rotation.Pitch = 0.0f;
         rotation.Roll = 0.0f;
-        thePlayer.TeleportWithRotation(targetPosition, rotation);
+        result = teleportPlayerAndVerify(targetPosition, rotation, "random XY final teleport");
+        if (!result) {
+            notify("AutoDriver random XY teleport was overridden by current player state");
+            return false;
+        }
         notify("AutoDriver random XY teleport complete");
         log.info("random XY success anchor=" + NameToString(anchorPin.tag)
             + " target=" + VecToString(targetPosition));
-        result = true;
         return result;
     }
 
-    protected function stopCurrentAction() {
-        var horse: CActor;
-        var mac: CMovingAgentComponent;
-
-        thePlayer.ActionCancelAll();
+    protected function stopAutoDriverActivityForTeleport() {
         resetWalkTarget();
         resetDirectTarget();
         resetTunedMoveTarget();
@@ -733,6 +751,16 @@ statemachine class CModAutoDriver extends CMod {
             npcStaticCam.Stop();
         }
 
+        destroyAutoClone();
+    }
+
+    protected function stopCurrentAction() {
+        var horse: CActor;
+        var mac: CMovingAgentComponent;
+
+        thePlayer.ActionCancelAll();
+        stopAutoDriverActivityForTeleport();
+
         mac = thePlayer.GetMovingAgentComponent();
         if (mac) {
             mac.SetGameplayRelativeMoveSpeed(0.0f);
@@ -744,8 +772,6 @@ statemachine class CModAutoDriver extends CMod {
                 horse.ActionCancelAll();
             }
         }
-
-        destroyAutoClone();
     }
 
     protected function randomGroundPosition(origin: Vector, minDistance: float, maxDistance: float) : Vector {
@@ -1610,7 +1636,7 @@ statemachine class CModAutoDriver extends CMod {
                 || GetCurrentStateName() == 'AutoDriver_RandomXYTeleport') {
                 notify("AutoDriver horse/teleport transition is already running");
             } else {
-                stopCurrentAction();
+                stopAutoDriverActivityForTeleport();
                 GotoState('AutoDriver_OfficialTeleport');
             }
         }
@@ -1623,7 +1649,7 @@ statemachine class CModAutoDriver extends CMod {
                 || GetCurrentStateName() == 'AutoDriver_RandomXYTeleport') {
                 notify("AutoDriver horse/teleport transition is already running");
             } else {
-                stopCurrentAction();
+                stopAutoDriverActivityForTeleport();
                 GotoState('AutoDriver_RandomXYTeleport');
             }
         }
@@ -1654,10 +1680,11 @@ state AutoDriver_OfficialTeleport in CModAutoDriver {
     entry function OfficialTeleportLoop() {
         var reason: String;
         var ready: bool;
+        var teleported: bool;
 
         ready = parent.prepareTeleportForTravel(reason);
         if (ready) {
-            parent.performOfficialTeleport();
+            teleported = parent.performOfficialTeleport();
         } else {
             parent.notify("AutoDriver teleport blocked: " + reason);
         }

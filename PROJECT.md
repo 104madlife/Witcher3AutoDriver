@@ -890,3 +890,23 @@ Mounted teleport behavior:
 ### Horse-toggle XY relocation correction
 
 The persistent `GetHorseWithInventory()` handle can remain valid while Roach is far outside the local area. Calling `VMT_ImmediateUse` on that remote entity moves the player to its mount slot, which appeared as a repeatable XY teleport. The distance gate and official recall flow prevent immediate mounting of a remote persistent horse. A limited position adjustment of up to the configured mounting range remains acceptable for the prototype.
+
+# 2026-07-14: Expanded-state direct teleport
+
+`NumPad8` and `NumPad9` now treat combat, swimming, diving, boat use, boat-passenger use, climbing, and scripted actions as valid input/teleport states:
+
+- Both actions are mapped in `Combat`, `Combat_Replacer_Ciri`, `Swimming`, `Diving`, `Boat`, `BoatPassenger`, `JumpClimb`, and `ScriptedAction` contexts.
+- Combat and boat checks were removed from the teleport eligibility function. Active gameplay/non-gameplay story scenes remain blocked.
+- Teleport preparation identifies a real horse before consulting shared rider status. Boats are no longer misclassified through generic `CAIStorageRiderData.mountStatus`.
+- Mounted-horse behavior remains unchanged: instant-dismount, wait for confirmed completion, then teleport.
+- Other valid states are not cancelled, dismounted, or forced into `Exploration` before teleporting.
+- Teleport actions use a mod-only cleanup path that does not call `thePlayer.ActionCancelAll()` or change native movement speed.
+- Local `TeleportWithRotation(...)` calls are followed by a short position check and up to three attempts. Failure logs target and actual positions so attachment/state overrides can be diagnosed without forcing a player-state transition.
+- Cross-world travel remains a direct `ScheduleWorldChangeToPosition(...)` or map-pin fallback request.
+
+Pending runtime validation:
+
+- Script compilation after converting official local teleport to a latent verified operation.
+- Direct local teleport from combat, swimming, diving, boat driver/passenger, climbing, and scripted-action states.
+- Whether boat or traversal attachment overwrites all three direct teleport attempts.
+- Cross-world teleport from these contexts and resulting engine-managed state after loading.

@@ -13,3 +13,10 @@
 
 - For every `Could not find function` error, locate the function declaration and verify receiver type, inheritance, parameters, return type, and latent behavior before editing.
 - Do not move an unqualified call onto another object unless the callback/lifecycle semantics have also been verified.
+- Never place a latent function call directly in a `return` statement or boolean condition. Assign its result to a local variable first, then return or branch on that variable.
+
+## Vehicle state ownership
+
+- `CAIStorageRiderData.sharedParams.mountStatus` is shared vehicle state and is not proof that the player is riding a horse. Boats can also expose rider/vehicle state.
+- Before applying horse-only behavior such as `DismountVehicle(horse, DT_instant)`, identify a real horse through `GetHorseCurrentlyMounted()` or `GetUsedHorseComponent()`.
+- Teleport preparation must not require rider data for players who are swimming, fighting, climbing, sailing, or using another vehicle.

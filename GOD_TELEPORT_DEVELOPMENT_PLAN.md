@@ -2,7 +2,7 @@
 
 Date: 2026-07-12
 
-Status: Initial implementation completed on 2026-07-12; pending in-game script compilation and runtime validation.
+Status: Initial implementation completed on 2026-07-12. Expanded-state direct teleport implemented on 2026-07-14; pending in-game script compilation and runtime validation.
 
 ## 1. Scope
 
@@ -197,11 +197,12 @@ This intentionally tests every pin. Harbor destinations may expose player-placem
 
 If the destination world path equals the current world's depot path:
 
-1. Cancel AutoDriver/player movement actions.
-2. Require the player to be on foot for the first version, or explicitly dismount before teleporting.
+1. Stop only AutoDriver-owned wander, clone, and custom-camera activity. Do not call `ActionCancelAll()` solely for teleport preparation.
+2. If the player is riding a horse, instant-dismount and wait for confirmed `VMS_dismounted`. Do not pre-emptively exit combat, swimming, diving, boat, climbing, or scripted-action states.
 3. Normalize destination rotation pitch/roll to zero.
-4. Call `TeleportWithRotation(position, rotation)`.
-5. Log success and selected pin metadata.
+4. Call `TeleportWithRotation(position, rotation)` directly.
+5. Wait briefly and verify that the player reached the destination. Retry up to the configured limit if the current state overwrites the transform.
+6. Log success, failure distance, and selected pin metadata.
 
 ### 4.5 Cross-world destination
 
@@ -218,7 +219,10 @@ If the destination belongs to another world:
 - Empty list: show HUD error and do nothing.
 - Unknown area/world path: log and keep the cursor on that entry for inspection, or provide an explicit skip-on-next-press rule.
 - Failed position lookup: use the official map-pin fallback only for cross-world travel; for local travel, log the failure and do not brute-force teleport to the visible map-pin coordinate.
-- Player in combat, scene, boat, horse, or another blocked state: first version should refuse with a clear HUD message instead of forcing state transitions.
+- Active story scene: refuse with a clear HUD message because scene/quest logic owns the player transform.
+- Mounted horse: instant-dismount and wait for completion before issuing teleport.
+- Combat, swimming, diving, boat, boat-passenger, climbing, and scripted-action contexts: issue teleport directly without forcing a player-state transition.
+- Local transform overwritten by the current state: retry briefly, then log the actual and target positions without forcing `Exploration` or another player state.
 
 ### 4.7 Validation record
 
@@ -306,7 +310,8 @@ The implementation must guard against a second key press while this operation is
 ## 7. Non-Goals For The First Version
 
 - No automatic repeated teleport loop; one key press issues one operation.
-- No forced teleport during scenes, combat, horse riding, sailing, or other unsafe player states.
+- No teleport during active story scenes or death/menu contexts.
+- No forced combat, swimming, diving, boat, climbing, or scripted-action state transition before teleporting.
 - No arbitrary cross-world random XY.
 - No brute-force teleport when navmesh validation fails.
 - No blanket negative-buff immunity as part of god mode.
@@ -320,3 +325,4 @@ The following choices should be reviewed before implementation:
 2. Harbor points are included and attempted even while the player is on foot, because the requirement says no filtering; they are treated as an explicit risk category in logs.
 3. `NumPad9` interprets random XY as a random validated point near a randomly chosen safe anchor in the current world, not an unconstrained point anywhere in the world's rectangular bounds.
 4. God mode maintains full `BCS_Air` and removes drowning instead of enabling immunity to every negative effect.
+5. `NumPad8` and `NumPad9` are reachable from combat, swimming, diving, boat, boat-passenger, climbing, and scripted-action input contexts. Only mounted-horse travel has a mandatory pre-teleport state change.
