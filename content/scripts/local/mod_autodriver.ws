@@ -86,6 +86,8 @@ statemachine class CModAutoDriver extends CMod {
     protected var randomTeleportMaxVerticalDelta: float; default randomTeleportMaxVerticalDelta = 50.0f;
     protected var randomTeleportStreamingDelay: float; default randomTeleportStreamingDelay = 2.0f;
     protected var randomTeleportAttempts: int; default randomTeleportAttempts = 20;
+    protected var horseTransitionTimeout: float; default horseTransitionTimeout = 5.0f;
+    protected var horseTransitionPollInterval: float; default horseTransitionPollInterval = 0.05f;
     protected var godModeEnabled: bool;
 
     protected var hasWalkTarget: bool;
@@ -126,14 +128,14 @@ statemachine class CModAutoDriver extends CMod {
         theInput.RegisterListener(this, 'OnToggleWalkWander', 'AutoDriver_WalkWander');
         theInput.RegisterListener(this, 'OnToggleDirectWander', 'AutoDriver_DirectWander');
         theInput.RegisterListener(this, 'OnToggleCameraFollowNpc', 'AutoDriver_CameraFollowNpc');
-        theInput.RegisterListener(this, 'OnToggleStaticCameraFollowNpc', 'AutoDriver_StaticCameraFollowNpc');
+        theInput.RegisterListener(this, 'OnToggleHorseRide', 'AutoDriver_ToggleHorse');
         theInput.RegisterListener(this, 'OnToggleHorseWander', 'AutoDriver_HorseWander');
         theInput.RegisterListener(this, 'OnToggleGodMode', 'AutoDriver_GodMode');
         theInput.RegisterListener(this, 'OnOfficialTeleport', 'AutoDriver_OfficialTeleport');
         theInput.RegisterListener(this, 'OnRandomXYTeleport', 'AutoDriver_RandomXYTeleport');
 
         GotoState('AutoDriver_Idle');
-        notify("AutoDriver loaded: NumPad7 god, NumPad8 official teleport, NumPad9 random XY");
+        notify("AutoDriver loaded: NumPad6 horse toggle, NumPad7 god, NumPad8/9 teleport");
     }
 
     protected function notify(message: String) {
@@ -222,7 +224,181 @@ statemachine class CModAutoDriver extends CMod {
         }
     }
 
-    protected function canUseTeleport(out reason: String) : bool {
+    protected latent function waitForHorseStatus(targetStatus: EVehicleMountStatus) : bool {
+        var riderData: CAIStorageRiderData;
+        var timeoutAt: float;
+        var result: bool;
+
+        riderData = thePlayer.GetRiderData();
+        if (!riderData) {
+            return false;
+        }
+
+        timeoutAt = theGame.GetEngineTimeAsSeconds() + horseTransitionTimeout;
+        while (theGame.GetEngineTimeAsSeconds() < timeoutAt) {
+            if (riderData.GetRidingManagerCurrentTask() == RMT_None
+                && riderData.sharedParams.mountStatus == targetStatus) {
+                result = true;
+                return result;
+            }
+
+            if (riderData.ridingManagerMountError) {
+                return false;
+            }
+
+            Sleep(horseTransitionPollInterval);
+        }
+
+        return false;
+    }
+
+    protected function getCurrentHorseEntity() : CNewNPC {
+        var horse: CNewNPC;
+        var horseComponent: W3HorseComponent;
+
+        horse = thePlayer.GetHorseCurrentlyMounted();
+        if (horse) {
+            return horse;
+        }
+
+        horseComponent = thePlayer.GetUsedHorseComponent();
+        if (horseComponent) {
+            horse = (CNewNPC)horseComponent.GetEntity();
+        }
+
+        return horse;
+    }
+
+    protected latent function performHorseToggle() : bool {
+        var riderData: CAIStorageRiderData;
+        var horse: CNewNPC;
+        var createEntityHelper: CR4CreateEntityHelper;
+        var status: EVehicleMountStatus;
+        var completed: bool;
+
+        if (!thePlayer || theGame.IsDialogOrCutscenePlaying()
+            || theGame.IsFading() || theGame.IsBlackscreen()) {
+            notify("AutoDriver horse toggle blocked by current game state");
+            return false;
+        }
+
+        riderData = thePlayer.GetRiderData();
+        if (!riderData) {
+            notify("AutoDriver horse toggle failed: rider data unavailable");
+            return false;
+        }
+
+        status = riderData.sharedParams.mountStatus;
+        if (status == VMS_mounted) {
+            horse = getCurrentHorseEntity();
+            if (!horse) {
+                notify("AutoDriver dismount failed: mounted horse unavailable");
+                return false;
+            }
+
+            notify("AutoDriver dismounting horse");
+            thePlayer.DismountVehicle(horse, DT_instant);
+            completed = waitForHorseStatus(VMS_dismounted);
+            if (completed) {
+                notify("AutoDriver horse dismount complete");
+            } else {
+                notify("AutoDriver horse dismount timed out");
+            }
+            return completed;
+        }
+
+        if (status == VMS_dismountInProgress) {
+            completed = waitForHorseStatus(VMS_dismounted);
+            if (completed) {
+                notify("AutoDriver horse dismount complete");
+            } else {
+                notify("AutoDriver horse dismount timed out");
+            }
+            return completed;
+        }
+
+        if (status == VMS_mountInProgress) {
+            notify("AutoDriver horse mount already in progress");
+            completed = waitForHorseStatus(VMS_mounted);
+            return completed;
+        }
+
+        if (thePlayer.IsInCombat() || thePlayer.IsInInterior() || thePlayer.IsInAir()
+            || thePlayer.IsSwimming() || thePlayer.IsDiving()
+            || thePlayer.IsSailing() || thePlayer.IsUsingBoat()) {
+            notify("AutoDriver horse mount blocked by current player state");
+            return false;
+        }
+
+        horse = thePlayer.GetHorseWithInventory();
+        notify("AutoDriver mounting horse");
+        if (!horse || !horse.IsAlive()) {
+            createEntityHelper = new CR4CreateEntityHelper in thePlayer;
+            createEntityHelper.SetPostAttachedCallback(thePlayer, 'OnInstantMountVehicle');
+            theGame.SummonPlayerHorse(false, createEntityHelper);
+        } else {
+            thePlayer.MountVehicle(horse, VMT_ImmediateUse, EVS_driver_slot);
+        }
+
+        completed = waitForHorseStatus(VMS_mounted);
+        if (completed) {
+            notify("AutoDriver horse mount complete");
+        } else {
+            notify("AutoDriver horse mount timed out");
+        }
+        return completed;
+    }
+
+    protected latent function prepareTeleportForTravel(out reason: String) : bool {
+        var riderData: CAIStorageRiderData;
+        var horse: CNewNPC;
+        var status: EVehicleMountStatus;
+        var completed: bool;
+        var allowed: bool;
+
+        allowed = canUseTeleport(reason, true);
+        if (!allowed) {
+            return false;
+        }
+
+        riderData = thePlayer.GetRiderData();
+        if (!riderData) {
+            reason = "rider data unavailable";
+            return false;
+        }
+
+        status = riderData.sharedParams.mountStatus;
+        if (status == VMS_mountInProgress) {
+            reason = "horse mount is in progress";
+            return false;
+        }
+
+        if (status == VMS_mounted) {
+            horse = getCurrentHorseEntity();
+            if (!horse) {
+                reason = "mounted horse unavailable";
+                return false;
+            }
+
+            notify("AutoDriver teleport: dismounting horse first");
+            thePlayer.DismountVehicle(horse, DT_instant);
+        }
+
+        if (status == VMS_mounted || status == VMS_dismountInProgress) {
+            completed = waitForHorseStatus(VMS_dismounted);
+            if (!completed) {
+                reason = "horse dismount timed out";
+                return false;
+            }
+        }
+
+        allowed = canUseTeleport(reason, false);
+        return allowed;
+    }
+
+    protected function canUseTeleport(out reason: String, optional allowMountedHorse: bool) : bool {
+        var riderData: CAIStorageRiderData;
+
         if (!thePlayer) {
             reason = "player unavailable";
             return false;
@@ -238,7 +414,9 @@ statemachine class CModAutoDriver extends CMod {
             return false;
         }
 
-        if (thePlayer.IsUsingHorse(true)) {
+        riderData = thePlayer.GetRiderData();
+        if (!allowMountedHorse && riderData
+            && riderData.sharedParams.mountStatus != VMS_dismounted) {
             reason = "dismount horse first";
             return false;
         }
@@ -449,8 +627,10 @@ statemachine class CModAutoDriver extends CMod {
         var rotation: EulerAngles;
         var reason: String;
         var result: bool;
+        var ready: bool;
 
-        if (!canUseTeleport(reason)) {
+        ready = prepareTeleportForTravel(reason);
+        if (!ready) {
             notify("AutoDriver random teleport blocked: " + reason);
             return false;
         }
@@ -1355,15 +1535,15 @@ statemachine class CModAutoDriver extends CMod {
         }
     }
 
-    event OnToggleStaticCameraFollowNpc(action: SInputAction) {
+    event OnToggleHorseRide(action: SInputAction) {
         if (IsPressed(action)) {
-            if (GetCurrentStateName() == 'AutoDriver_StaticCameraFollowNpc') {
-                stopNpcCamera();
-                GotoState('AutoDriver_Idle');
-                notify("AutoDriver static NPC camera stopped");
+            if (GetCurrentStateName() == 'AutoDriver_HorseToggle'
+                || GetCurrentStateName() == 'AutoDriver_OfficialTeleport'
+                || GetCurrentStateName() == 'AutoDriver_RandomXYTeleport') {
+                notify("AutoDriver horse/teleport transition is already running");
             } else {
                 stopCurrentAction();
-                GotoState('AutoDriver_StaticCameraFollowNpc');
+                GotoState('AutoDriver_HorseToggle');
             }
         }
     }
@@ -1393,14 +1573,23 @@ statemachine class CModAutoDriver extends CMod {
 
     event OnOfficialTeleport(action: SInputAction) {
         if (IsPressed(action)) {
-            performOfficialTeleport();
+            if (GetCurrentStateName() == 'AutoDriver_HorseToggle'
+                || GetCurrentStateName() == 'AutoDriver_OfficialTeleport'
+                || GetCurrentStateName() == 'AutoDriver_RandomXYTeleport') {
+                notify("AutoDriver horse/teleport transition is already running");
+            } else {
+                stopCurrentAction();
+                GotoState('AutoDriver_OfficialTeleport');
+            }
         }
     }
 
     event OnRandomXYTeleport(action: SInputAction) {
         if (IsPressed(action)) {
-            if (GetCurrentStateName() == 'AutoDriver_RandomXYTeleport') {
-                notify("AutoDriver random XY teleport is already running");
+            if (GetCurrentStateName() == 'AutoDriver_HorseToggle'
+                || GetCurrentStateName() == 'AutoDriver_OfficialTeleport'
+                || GetCurrentStateName() == 'AutoDriver_RandomXYTeleport') {
+                notify("AutoDriver horse/teleport transition is already running");
             } else {
                 stopCurrentAction();
                 GotoState('AutoDriver_RandomXYTeleport');
@@ -1410,6 +1599,38 @@ statemachine class CModAutoDriver extends CMod {
 }
 
 state AutoDriver_Idle in CModAutoDriver {
+}
+
+state AutoDriver_HorseToggle in CModAutoDriver {
+    event OnEnterState(prevStateName: CName) {
+        super.OnEnterState(prevStateName);
+        HorseToggleLoop();
+    }
+
+    entry function HorseToggleLoop() {
+        parent.performHorseToggle();
+        parent.GotoState('AutoDriver_Idle');
+    }
+}
+
+state AutoDriver_OfficialTeleport in CModAutoDriver {
+    event OnEnterState(prevStateName: CName) {
+        super.OnEnterState(prevStateName);
+        OfficialTeleportLoop();
+    }
+
+    entry function OfficialTeleportLoop() {
+        var reason: String;
+        var ready: bool;
+
+        ready = parent.prepareTeleportForTravel(reason);
+        if (ready) {
+            parent.performOfficialTeleport();
+        } else {
+            parent.notify("AutoDriver teleport blocked: " + reason);
+        }
+        parent.GotoState('AutoDriver_Idle');
+    }
 }
 
 state AutoDriver_WalkWander in CModAutoDriver {

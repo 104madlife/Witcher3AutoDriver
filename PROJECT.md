@@ -868,3 +868,20 @@ Pending validation:
 - Mod initialization clears stale marked protections left by saving or exiting while god mode was enabled.
 - Existing durability is not repaired. The feature prevents subsequent durability loss while enabled.
 - Items acquired after god mode is enabled are not protected until god mode is toggled off and on again.
+
+# 2026-07-13: Horse toggle and mounted teleport preparation
+
+`NumPad6` now toggles the player's mounted state:
+
+- Mounted players use `DismountVehicle(horse, DT_instant)`.
+- If the player horse exists and is alive, mounting uses `MountVehicle(horse, VMT_ImmediateUse, EVS_driver_slot)`.
+- If the player horse is absent or dead, AutoDriver mirrors the official `InstantMountPlayer` quest flow with `SummonPlayerHorse(false, helper)` and the player's `OnInstantMountVehicle` post-attach callback.
+- Completion is confirmed by `GetRidingManagerCurrentTask() == RMT_None` plus `VMS_mounted` or `VMS_dismounted`, with a five-second timeout.
+
+Mounted teleport behavior:
+
+- `NumPad8` now runs in a dedicated latent state.
+- `NumPad9` retains its latent random-XY state and shares the same teleport preparation function.
+- A mounted player is dismounted with `DT_instant`; teleport starts only after the riding manager reports `VMS_dismounted`.
+- Mount-in-progress, timeout, combat, story-scene, and boat restrictions still cancel teleport safely.
+- `AutoDriver_ToggleHorse`, `AutoDriver_OfficialTeleport`, and `AutoDriver_RandomXYTeleport` are mapped in both exploration and horse input contexts.

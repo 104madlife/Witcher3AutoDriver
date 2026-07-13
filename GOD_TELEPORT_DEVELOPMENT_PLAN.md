@@ -14,6 +14,8 @@ This phase replaces the current experimental meanings of `NumPad7` and `NumPad8`
 | `NumPad8` | Official stable teleport | Teleport once per press through the complete official fast-travel-point list, including cross-world destinations, with no discovery, enabled-state, type, or area filtering. |
 | `NumPad9` | Random XY teleport | Generate and validate a random destination in the current world only. |
 
+`NumPad6` is additionally assigned to an official-style horse mount/dismount toggle. `NumPad8` and `NumPad9` automatically perform and confirm an instant dismount before teleporting when the player is mounted.
+
 The old `NumPad7` tuned-move experiment and `NumPad8` custom-seek experiment will no longer be bound to those keys. Their code may remain temporarily for comparison, but must not run from the new bindings.
 
 ## 2. Confirmed Base-Game Interfaces
