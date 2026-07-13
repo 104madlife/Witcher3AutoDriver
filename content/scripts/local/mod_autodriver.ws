@@ -121,6 +121,8 @@ statemachine class CModAutoDriver extends CMod {
     public function init() {
         super.init();
 
+        disableEquipmentDurabilityProtection();
+
         theInput.RegisterListener(this, 'OnToggleWalkWander', 'AutoDriver_WalkWander');
         theInput.RegisterListener(this, 'OnToggleDirectWander', 'AutoDriver_DirectWander');
         theInput.RegisterListener(this, 'OnToggleCameraFollowNpc', 'AutoDriver_CameraFollowNpc');
@@ -143,13 +145,70 @@ statemachine class CModAutoDriver extends CMod {
         godModeEnabled = true;
         thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Default, true);
         maintainGodModeOxygen();
-        notify("AutoDriver god mode ON: no health damage, oxygen refilled");
+        notify("AutoDriver god mode ON: no health damage, " + IntToString(enableEquipmentDurabilityProtection()) + " items protected");
     }
 
     protected function disableGodMode() {
         godModeEnabled = false;
         thePlayer.SetImmortalityMode(AIM_None, AIC_Default, true);
-        notify("AutoDriver god mode OFF");
+        notify("AutoDriver god mode OFF: " + IntToString(disableEquipmentDurabilityProtection()) + " item protections removed");
+    }
+
+    protected function enableEquipmentDurabilityProtection() : int {
+        var items: array<SItemUniqueId>;
+        var item: SItemUniqueId;
+        var i, protectedCount: int;
+
+        if (!thePlayer) {
+            return 0;
+        }
+
+        thePlayer.inv.GetAllItems(items);
+        for (i = 0; i < items.Size(); i += 1) {
+            item = items[i];
+            if (!thePlayer.inv.IsIdValid(item) || !thePlayer.inv.HasItemDurability(item)) {
+                continue;
+            }
+
+            if (thePlayer.inv.GetItemModifierInt(item, 'AutoDriverIndestructible', 0) > 0) {
+                if (!thePlayer.inv.ItemHasAbility(item, 'MA_Indestructible')) {
+                    thePlayer.inv.AddItemCraftedAbility(item, 'MA_Indestructible', false);
+                }
+                protectedCount += 1;
+            } else if (!thePlayer.inv.ItemHasAbility(item, 'MA_Indestructible')) {
+                thePlayer.inv.AddItemCraftedAbility(item, 'MA_Indestructible', false);
+                thePlayer.inv.SetItemModifierInt(item, 'AutoDriverIndestructible', 1);
+                protectedCount += 1;
+            }
+        }
+
+        return protectedCount;
+    }
+
+    protected function disableEquipmentDurabilityProtection() : int {
+        var items: array<SItemUniqueId>;
+        var item: SItemUniqueId;
+        var i, removedCount: int;
+
+        if (!thePlayer) {
+            return 0;
+        }
+
+        thePlayer.inv.GetAllItems(items);
+        for (i = 0; i < items.Size(); i += 1) {
+            item = items[i];
+            if (!thePlayer.inv.IsIdValid(item) || thePlayer.inv.GetItemModifierInt(item, 'AutoDriverIndestructible', 0) <= 0) {
+                continue;
+            }
+
+            if (thePlayer.inv.ItemHasAbility(item, 'MA_Indestructible')) {
+                thePlayer.inv.RemoveItemCraftedAbility(item, 'MA_Indestructible');
+            }
+            thePlayer.inv.SetItemModifierInt(item, 'AutoDriverIndestructible', 0);
+            removedCount += 1;
+        }
+
+        return removedCount;
     }
 
     protected function maintainGodModeOxygen() {

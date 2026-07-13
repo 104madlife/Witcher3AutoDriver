@@ -10,7 +10,7 @@ This phase replaces the current experimental meanings of `NumPad7` and `NumPad8`
 
 | Key | Feature | Required behavior |
 | --- | --- | --- |
-| `NumPad7` | God mode toggle | Toggle health damage immunity and unlimited underwater oxygen. |
+| `NumPad7` | God mode toggle | Toggle health damage immunity and equipment durability protection; refill oxygen once when enabled. |
 | `NumPad8` | Official stable teleport | Teleport once per press through the complete official fast-travel-point list, including cross-world destinations, with no discovery, enabled-state, type, or area filtering. |
 | `NumPad9` | Random XY teleport | Generate and validate a random destination in the current world only. |
 
@@ -94,7 +94,15 @@ If the destination position cannot be resolved, the official fallback is:
 theGame.ScheduleWorldChangeToMapPin(worldPath, pin.tag);
 ```
 
-## 3. NumPad7 Design: Invulnerability And Unlimited Oxygen
+## 3. NumPad7 Design: Invulnerability, Oxygen, And Equipment Durability
+
+### Equipment durability extension
+
+- On enable, scan all durability-bearing items currently in the player inventory.
+- Add the official `MA_Indestructible` crafted ability only to items that do not already have it.
+- Mark AutoDriver-owned changes with `AutoDriverIndestructible = 1` using the item modifier API.
+- On disable or mod initialization, remove the ability only from marked items and clear the marker.
+- Do not repair durability that was already lost, and do not alter inherently indestructible items.
 
 ### 3.1 State owned by AutoDriver
 
@@ -282,7 +290,7 @@ The implementation must guard against a second key press while this operation is
 
 ## 6. Implementation Order
 
-1. Add `NumPad7` god-mode toggle with oxygen maintenance and isolated timer lifecycle.
+1. Add `NumPad7` god-mode toggle with health invulnerability, one-time oxygen refill, and reversible equipment durability protection.
 2. Test damage, diving, repeated toggles, and world transition behavior.
 3. Replace `NumPad8` binding and implement complete fast-travel enumeration plus sequential cursor/logging.
 4. Test local road signs first without adding filters to the list logic.

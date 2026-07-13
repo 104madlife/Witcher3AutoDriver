@@ -859,3 +859,12 @@ Pending validation:
 - StoryBoardUI's direct timer calls occur in entity-derived classes and cannot be copied into `CModAutoDriver` without preserving that ownership model.
 - Calling `thePlayer.AddTimer` is not a drop-in fix because the timer callback must exist on the timer-owning entity.
 - The invalid oxygen maintenance timer was removed to restore compilation. Health invulnerability still protects against drowning damage; persistent oxygen replenishment needs a verified entity helper or effect-layer implementation.
+
+# 2026-07-13: God-mode equipment durability protection
+
+- `NumPad7` now protects every durability-bearing item currently in the player's inventory by adding the official `MA_Indestructible` crafted ability.
+- AutoDriver writes the item modifier `AutoDriverIndestructible = 1` only when it adds that ability.
+- Disabling god mode removes `MA_Indestructible` only from marked items, preserving equipment that was inherently indestructible before AutoDriver touched it.
+- Mod initialization clears stale marked protections left by saving or exiting while god mode was enabled.
+- Existing durability is not repaired. The feature prevents subsequent durability loss while enabled.
+- Items acquired after god mode is enabled are not protected until god mode is toggled off and on again.
