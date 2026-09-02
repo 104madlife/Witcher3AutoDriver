@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-02",
+  "gameRoot": "E:\\SteamLibrary\\steamapps\\common\\The Witcher 3",
+  "gameExecutables": [
+    {
+      "path": "bin/x64/witcher3.exe",
+      "version": "4.0.0.103190(Build Machine)",
+      "sha256": "3C3DB0C41622EE8DB359DA760260461699B731496480A1304B9C269942CC9535"
+    },
+    {
+      "path": "bin/x64_dx12/witcher3.exe",
+      "version": "4.0.0.103190(Build Machine)",
+      "sha256": "609BCA7033D02E9F34D446F97E739332CB785E18D51E08476AEB7F30091038D5"
+    }
+  ],
+  "runtimeDestination": {
+    "path": "mods/modAutoDriver",
+    "kind": "junction",
+    "target": "E:\\SteamLibrary\\steamapps\\common\\The Witcher 3\\mods\\AutoDriver"
+  },
+  "bootstrap": {
+    "registryPath": "mods/modBootstrap-registry/content/scripts/local/mods_registry.ws",
+    "sha256": "DF90101B1E4ABC7482F4D03C693153A2A85281CF4478E623352C9929812EF589",
+    "autoDriverRegistrationCount": 1
+  },
+  "storyboard": {
+    "modInstalled": true,
+    "dlcInstalled": true,
+    "resourceContainer": "dlc/dlcStoryboardUi/content/blob0.bundle"
+  },
+  "userInput": {
+    "path": "C:\\Users\\64617\\Documents\\The Witcher 3\\input.settings",
+    "sha256": "66F3F786CA26D0B49CDE75D7242E5C95D0C03CB51814B61435CE589E3C2A3B79",
+    "actionsPresent": true,
+    "note": "External user-owned state; recorded for evidence only."
+  }
+}

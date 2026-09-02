@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-02",
+  "sourceRepository": "E:\\SteamLibrary\\steamapps\\common\\The Witcher 3\\mods\\AutoDriver",
+  "sourceBranch": "codex/standardize-mod-repo",
+  "sourceCommit": "fd0476376bfd455891dabaed9f7b5563d4d4fbf4",
+  "sourceWorktreeClean": true,
+  "trackedFiles": [
+    { "path": ".gitignore", "bytes": 223, "sha256": "FF99AA4F7FF612B0733B95E697397B8D714CB654EC7385A322DEB6A6B62ED2CC" },
+    { "path": "AGENT.md", "bytes": 1984, "sha256": "ABFDC0659889CBDEE0D982353F502D874FAECEAA506B7D3A2D582DBBA278E6D4" },
+    { "path": "AutoDriver.input.settings", "bytes": 1941, "sha256": "1A23B186A5C884B6EC227C42F49D0E0C04DF376F155BAFCC8FB20F5A0F386E11" },
+    { "path": "GOD_TELEPORT_DEVELOPMENT_PLAN.md", "bytes": 16168, "sha256": "BF2CDC803E8B3931A25EE17CBA9D539FF4E1EB636617458CF074CE025A68E9C8" },
+    { "path": "PROJECT.md", "bytes": 7725, "sha256": "A9918A88BEA7C57EFA89609C4C939A88CE39CB6772435045B70A596E80AC15F9" },
+    { "path": "content/scripts/local/mod_autodriver.ws", "bytes": 66361, "sha256": "D33F43EA882480D60D2579E14133BE47F6ADA6BFC854AD2DA2750BD59318C93D" },
+    { "path": "docs/experiments.md", "bytes": 41293, "sha256": "431D339D7B46D2739FDEC7CBC458B35B5B2767C5D6513256309FC51B1F20140A" },
+    { "path": "docs/interface-matrix.md", "bytes": 11115, "sha256": "F457B05574DF5A2C165212046DCE5D88E41CB3C023496A95B93E273900B8543E" },
+    { "path": "docs/pitfalls.md", "bytes": 8877, "sha256": "6886270E4E19653B0D3079DA527CEA54DCBE9769B3D4EB8F6E8B1E1D8D7D5968" },
+    { "path": "docs/standalone-migration-plan.md", "bytes": 24547, "sha256": "84B061C6F6B796A138089570B59450CBDF5145F061E9837973C9D042FC083C96" },
+    { "path": "modAutoDriver.input.settings", "bytes": 1061, "sha256": "4A4859952FEFBD9523AA96D0250F068D603CF163F84F2B6E5143FFC74D74B9E8" }
+  ]
+}

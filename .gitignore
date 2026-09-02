@@ -1,5 +1,6 @@
 # Local machine and editor state
 .mod-project.local.*
+!.mod-project.local.ps1.example
 .vs/
 *.user
 
@@ -7,6 +8,12 @@
 *.log
 *.tmp
 *.bak
+
+# Generated validation, package, deployment, and sandbox state
+artifacts/
+build/
+.migration-work/
+.mod-project.local.ps1
 
 # Common language caches
 __pycache__/

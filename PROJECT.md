@@ -9,7 +9,7 @@ Knowledge scaffold adopted: 2026-08-15
 - Purpose: drive character, horse, camera, and teleport state changes for automated in-game visual-data collection experiments.
 - Mod form: WitcherScript content Mod implemented as a bootstrapped `CMod` state machine.
 - Source entry point: `content/scripts/local/mod_autodriver.ws`.
-- Current status: experimental implementation with partial compile/runtime evidence. The 2026-07-14 expanded-state teleport changes still require current-game compilation and runtime validation.
+- Current status: standalone repository migration is in progress. Gameplay source remains unchanged from the legacy baseline; the 2026-07-14 expanded-state teleport changes still require current-game compilation and runtime validation.
 - Mod identity in source: `AutoDriver`, author `104madlife`, version `0.1`.
 
 ## Development Environment
@@ -17,8 +17,9 @@ Knowledge scaffold adopted: 2026-08-15
 - Game version: not recorded; capture the exact Classic/Next-Gen version during the next validation run.
 - Language: WitcherScript.
 - Loader/integration: `modBootstrap-registry` calls `createAutoDriver()`.
-- Repository location: `<game>/mods/AutoDriver`.
-- Runtime discovery path: `<game>/mods/modAutoDriver`, currently a directory junction targeting the repository.
+- Standalone repository location: `D:\workspace\ModDev\Witcher3AutoDriver` on the migration host.
+- Legacy repository location: `<game>/mods/AutoDriver`.
+- Runtime discovery path before first standalone deployment: `<game>/mods/modAutoDriver`, a directory junction targeting the legacy repository.
 - Vanilla script reference: `<game>/content/content0/scripts`.
 - External reference/dependency: StoryBoardUI. Its camera and Geralt-clone resources are required only by the corresponding experimental features.
 - No standalone compiler, package command, or automated test runner is currently recorded.
@@ -52,16 +53,19 @@ These external files are not owned by this Git repository. Verify them before co
 
 ## Working Procedures
 
-### Build / compile
+### Validate / compile
 
-- There is no repository-local build command.
+- Run `validate-project.ps1` for read-only repository and external-integration checks.
+- There is no repository-local WitcherScript compiler.
 - Launching the installed game/mod stack triggers WitcherScript compilation in the current setup.
 - For every compiler failure, record the exact error, declaring type, receiver/inheritance context, attempted fix, and final result in `docs/experiments.md`.
 
-### Deploy
+### Package / deploy
 
-- The repository is already located under the game installation.
-- Verify the `modAutoDriver` junction and Bootstrap registration rather than copying source into another directory.
+- Run `package.ps1` to produce a runtime-only package without touching the game.
+- Run `deploy.ps1 -GameRoot <path> -DryRun` before any real deployment.
+- The first real standalone deployment replaces only the verified `modAutoDriver` junction entry with a real runtime-only directory; it never mutates the junction target.
+- Verify Bootstrap registration and user input rather than overwriting their shared files.
 - Do not commit machine-specific absolute paths when `<game>` and `<documents>` placeholders are sufficient.
 
 ### Input configuration

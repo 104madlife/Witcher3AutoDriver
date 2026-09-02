@@ -1,6 +1,6 @@
 # The Witcher 3 AutoDriver Standalone Repository Migration Plan
 
-Status: approved design recorded; implementation not started
+Status: implementation in progress
 
 Plan date: 2026-09-02
 
@@ -42,7 +42,8 @@ Observed on 2026-09-02:
 | Item | Current evidence |
 | --- | --- |
 | Repository branch | `codex/standardize-mod-repo` |
-| Repository HEAD | `1829e75327fb332010a53d9d3636db3e94b984ba` |
+| Standardized source HEAD before the plan commit | `1829e75327fb332010a53d9d3636db3e94b984ba` |
+| History-preserving migration baseline | `fd0476376bfd455891dabaed9f7b5563d4d4fbf4` |
 | Working tree | Clean |
 | Legacy branch | `master` at `cb69c46` |
 | Git remote | None |
@@ -260,7 +261,7 @@ The current repository is already dedicated and clean, so migration must preserv
    - a clean worktree;
    - `git fsck --full` success;
    - identical hashes for all tracked files.
-4. Create `main` at `1829e75327fb332010a53d9d3636db3e94b984ba`.
+4. Create `main` at the clean history-preserving migration baseline `fd0476376bfd455891dabaed9f7b5563d4d4fbf4`, whose parent history contains the standardized source commit.
 5. Retain `master` and `codex/standardize-mod-repo` as historical pointers until migration and in-game acceptance are complete.
 6. Confirm the new repository has no accidental local-path remote.
 
