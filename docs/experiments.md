@@ -827,3 +827,44 @@ Pending runtime validation:
 - Direct local teleport from combat, swimming, diving, boat driver/passenger, climbing, and scripted-action states.
 - Whether boat or traversal attachment overwrites all three direct teleport attempts.
 - Cross-world teleport from these contexts and resulting engine-managed state after loading.
+
+## 2026-09-02: Standalone repository conversion
+
+Requirement:
+
+- preserve the complete dedicated-repository history while moving development out of the game installation;
+- preserve gameplay source and both input templates byte-for-byte;
+- separate runtime-owned source from Bootstrap, StoryBoardUI, vanilla scripts, and user input;
+- safely handle the existing `modAutoDriver` junction without writing through it.
+
+Repository results:
+
+- copied the complete Git repository to `D:\workspace\ModDev\Witcher3AutoDriver`;
+- verified 11 original tracked files with zero hash mismatches;
+- retained `master` and `codex/standardize-mod-repo` and created `main` from the clean migration baseline;
+- both legacy and standalone repositories passed `git fsck --full`;
+- gameplay source SHA-256 remained `D33F43EA882480D60D2579E14133BE47F6ADA6BFC854AD2DA2750BD59318C93D`;
+- both input-template hashes remained unchanged.
+
+Validation and packaging results:
+
+- repository/external validation passed 57 checks with zero errors and zero warnings on the real installation;
+- package contains exactly `modAutoDriver/content/scripts/local/mod_autodriver.ws`;
+- package payload hash matches the preserved source hash;
+- no standalone WitcherScript compiler was found, so no compile or gameplay claim is made.
+
+Sandbox results:
+
+- deployment Dry Run and rollback Dry Run produced no fixture changes;
+- verified junction replacement with a real runtime directory and exact junction recreation on rollback;
+- verified existing-file backup/restore and clean-install removal;
+- verified rejection of missing Bootstrap registration, unexpected junction targets, tampered and missing packages, changed deployed payloads, malformed receipts, and out-of-root receipt paths;
+- Bootstrap and user-input hashes were verified unchanged by successful transactions.
+
+Real game root result:
+
+- Dry Run recognized the current junction and its exact legacy target;
+- before/after fingerprints matched for junction type/target, legacy source, runtime source, Bootstrap registry, user input, and StoryBoardUI bundle;
+- no real deployment occurred.
+
+Conclusion: standalone repository conversion is Confirmed at repository level. WitcherScript compilation and gameplay behavior remain runtime pending.

@@ -9,12 +9,12 @@ Knowledge scaffold adopted: 2026-08-15
 - Purpose: drive character, horse, camera, and teleport state changes for automated in-game visual-data collection experiments.
 - Mod form: WitcherScript content Mod implemented as a bootstrapped `CMod` state machine.
 - Source entry point: `content/scripts/local/mod_autodriver.ws`.
-- Current status: standalone repository migration is in progress. Gameplay source remains unchanged from the legacy baseline; the 2026-07-14 expanded-state teleport changes still require current-game compilation and runtime validation.
+- Current status: standalone repository conversion is complete at repository level. History preservation, validation, runtime-only packaging, transactional sandbox deployment/rollback, and real-game-root Dry Run passed. Gameplay source remains unchanged; current-game compilation and runtime validation are still pending.
 - Mod identity in source: `AutoDriver`, author `104madlife`, version `0.1`.
 
 ## Development Environment
 
-- Game version: not recorded; capture the exact Classic/Next-Gen version during the next validation run.
+- Game version: Next-Gen `4.0.0.103190(Build Machine)` observed for both DX11 and DX12 executables on 2026-09-02.
 - Language: WitcherScript.
 - Loader/integration: `modBootstrap-registry` calls `createAutoDriver()`.
 - Standalone repository location: `D:\workspace\ModDev\Witcher3AutoDriver` on the migration host.
@@ -22,16 +22,23 @@ Knowledge scaffold adopted: 2026-08-15
 - Runtime discovery path before first standalone deployment: `<game>/mods/modAutoDriver`, a directory junction targeting the legacy repository.
 - Vanilla script reference: `<game>/content/content0/scripts`.
 - External reference/dependency: StoryBoardUI. Its camera and Geralt-clone resources are required only by the corresponding experimental features.
-- No standalone compiler, package command, or automated test runner is currently recorded.
+- No standalone WitcherScript compiler is currently available. Repository validation, packaging, and deployment regression tests are provided, but game launch remains the authoritative compile gate.
 
 ## Repository Layout
 
 ```text
 AutoDriver/
 ├── content/scripts/local/mod_autodriver.ws
+├── baselines/legacy-current/
 ├── AutoDriver.input.settings
 ├── modAutoDriver.input.settings
+├── validate-project.ps1
+├── package.ps1
+├── deploy.ps1
+├── restore-deployment.ps1
+├── tests/test-deployment.ps1
 ├── GOD_TELEPORT_DEVELOPMENT_PLAN.md
+├── README.md
 ├── PROJECT.md
 └── docs/
     ├── interface-matrix.md
@@ -45,7 +52,7 @@ The established Witcher 3 source and input layout is authoritative. Do not move 
 
 AutoDriver relies on integration outside this repository:
 
-1. `<game>/mods/modAutoDriver` must resolve to this repository so the game discovers the conventional `mod*` directory name.
+1. `<game>/mods/modAutoDriver` must contain the packaged runtime source. Before the first standalone deployment it is a junction to the legacy repository; afterward it becomes a real runtime-only directory.
 2. `<game>/mods/modBootstrap-registry/content/scripts/local/mods_registry.ws` must register `add(createAutoDriver());`.
 3. Input actions may need to be merged into `<documents>/The Witcher 3/input.settings`; preserve a backup before editing the live user file.
 
@@ -64,6 +71,7 @@ These external files are not owned by this Git repository. Verify them before co
 
 - Run `package.ps1` to produce a runtime-only package without touching the game.
 - Run `deploy.ps1 -GameRoot <path> -DryRun` before any real deployment.
+- Run `tests/test-deployment.ps1` after changing packaging, deployment, or rollback behavior.
 - The first real standalone deployment replaces only the verified `modAutoDriver` junction entry with a real runtime-only directory; it never mutates the junction target.
 - Verify Bootstrap registration and user input rather than overwriting their shared files.
 - Do not commit machine-specific absolute paths when `<game>` and `<documents>` placeholders are sufficient.
@@ -91,7 +99,8 @@ These external files are not owned by this Git repository. Verify them before co
 - Stop AutoDriver-owned state before testing another movement mode.
 - The code should remove only equipment modifiers marked with `AutoDriverIndestructible`.
 - Restore the backed-up live input file if input merging must be rolled back.
-- Junction and Bootstrap changes are external installation state; do not remove them as part of ordinary source rollback.
+- Use `restore-deployment.ps1` with the exact receipt for runtime rollback. The first rollback can recreate the recorded legacy junction.
+- Bootstrap and user-input files are verify-only external state and are never changed by core deployment or rollback.
 
 ## Current Input Semantics
 

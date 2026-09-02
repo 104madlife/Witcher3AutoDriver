@@ -122,3 +122,14 @@ These entries record repeatable, evidence-backed traps. Their scope is AutoDrive
 - Misleading workaround: treating the resource path as a vanilla game guarantee.
 - Evidence: camera/clone implementation and 2026-06-01/02 experiments.
 - Last verified: source review 2026-08-15.
+
+## Copying into a junction-backed runtime path can mutate the source repository
+
+- Game/runtime/language: Windows deployment of a Witcher 3 Mod whose `modAutoDriver` discovery path is a directory junction.
+- Applicable versions: legacy AutoDriver installation observed on 2026-09-02.
+- Symptom: a deployment that appears to update the game-side Mod also changes files inside the legacy development repository.
+- Root cause: ordinary file operations follow the junction and write to its target.
+- Verified fix/avoidance: inspect the reparse-point type and exact target first; stage and verify the package elsewhere; remove only the verified junction entry; then create a real runtime directory and copy receipt-owned files.
+- Misleading workaround: treating `<game>/mods/modAutoDriver` as an ordinary directory or recursively deleting it before resolving its target.
+- Evidence: junction sandbox deployment and rollback regression test.
+- Last verified: 2026-09-02.

@@ -146,3 +146,23 @@ This file is a reusable capability cache. Every entry is scoped to the recorded 
 - Known limitations: moving the call to `thePlayer` does not make a callback declared on `CModAutoDriver` run.
 - Source: engine `entity.ws`; compile error investigation on 2026-07-13.
 - Last verified: 2026-07-13.
+
+## Capability: Validate and package the standalone repository
+
+- Game/runtime: The Witcher 3 Next-Gen `4.0.0.103190(Build Machine)`; PowerShell repository tooling.
+- Interface: `validate-project.ps1`, `package.ps1`, baseline manifests, and package manifest.
+- Evidence state: Confirmed for repository structure and packaging; not a WitcherScript compile result.
+- Ownership/lifecycle: validation reads source and optional external integration state; packaging writes only ignored `artifacts/<Configuration>` output.
+- Known limitations: no standalone WitcherScript compiler was found, so game launch remains the authoritative compile gate.
+- Source: standalone migration implementation and 57-check validation receipt.
+- Last verified: 2026-09-02.
+
+## Capability: Transactionally deploy a junction-backed WitcherScript Mod
+
+- Game/runtime: Windows directory junction at `<game>/mods/modAutoDriver` and a runtime-only WitcherScript package.
+- Interface: `deploy.ps1`, `restore-deployment.ps1`, package manifest, deployment receipt, and rollback receipt.
+- Evidence state: Confirmed in junction, existing-directory, and clean-install sandboxes; real game root Dry Run confirmed with zero writes.
+- Ownership/lifecycle: deployment owns only `modAutoDriver/content/scripts/local/mod_autodriver.ws`; Bootstrap, StoryBoardUI, vanilla scripts, user input, and the legacy junction target are verify-only.
+- Known limitations: the first real deployment has not been executed; game compilation and gameplay remain pending. Rollback refuses a payload changed after deployment.
+- Source: `tests/test-deployment.ps1` and the 2026-09-02 migration experiment.
+- Last verified: 2026-09-02.

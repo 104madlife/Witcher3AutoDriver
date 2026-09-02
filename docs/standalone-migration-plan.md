@@ -1,6 +1,6 @@
 # The Witcher 3 AutoDriver Standalone Repository Migration Plan
 
-Status: implementation in progress
+Status: repository conversion complete; game compilation and runtime acceptance pending
 
 Plan date: 2026-09-02
 
@@ -572,21 +572,21 @@ Do not combine gameplay edits with these commits.
 
 Repository conversion is complete only when:
 
-- [ ] The legacy Git repository passes integrity checks and remains unchanged.
-- [ ] The standalone repository exists at the proposed destination with complete history.
-- [ ] `main` points to the standardized source baseline and historical branches remain available.
-- [ ] All raw source and input hashes match the legacy repository.
-- [ ] Baseline and external-integration receipts are recorded.
-- [ ] Repository validation passes without claiming game compilation.
-- [ ] Packaging produces only declared runtime-owned content.
-- [ ] Package output is hash-verified and Git-ignored.
-- [ ] Junction, real-directory and clean-install sandbox deployments pass.
-- [ ] Sandbox rollback restores the exact previous state in every case.
-- [ ] Negative paths reject unsafe or ambiguous operations.
-- [ ] Real-game-root Dry Run succeeds with zero writes.
-- [ ] Bootstrap, StoryBoardUI, vanilla scripts and user settings remain unmodified.
-- [ ] The new repository working tree is clean with separated migration commits.
-- [ ] The user receives exact deploy, rollback and in-game acceptance instructions.
+- [x] The legacy Git repository passes integrity checks and remains unchanged after the requested plan commit.
+- [x] The standalone repository exists at the proposed destination with complete history.
+- [x] `main` contains the standardized source baseline and historical branches remain available.
+- [x] All raw source and input hashes match the legacy repository.
+- [x] Baseline and external-integration receipts are recorded.
+- [x] Repository validation passes without claiming game compilation.
+- [x] Packaging produces only declared runtime-owned content.
+- [x] Package output is hash-verified and Git-ignored.
+- [x] Junction, real-directory and clean-install sandbox deployments pass.
+- [x] Sandbox rollback restores the exact previous state in every case.
+- [x] Negative paths reject unsafe or ambiguous operations.
+- [x] Real-game-root Dry Run succeeds with zero writes.
+- [x] Bootstrap, StoryBoardUI, vanilla scripts and user settings remain unmodified.
+- [x] The new repository working tree is clean with separated migration commits.
+- [x] The user receives exact deploy, rollback and in-game acceptance instructions.
 
 Successful repository conversion does not imply successful gameplay. Runtime capabilities are promoted only after the user completes the in-game checklist and supplies the resulting compile/runtime evidence.
 
@@ -606,3 +606,18 @@ Stop and request review if any of the following occurs:
 - migration exposes a gameplay decision that would change existing behavior.
 
 Ordinary documentation, packaging or script implementation errors are bounded migration work and should be corrected without changing the approved ownership model.
+
+## 25. Execution Record — 2026-09-02
+
+- Legacy plan commit and migration baseline: `fd0476376bfd455891dabaed9f7b5563d4d4fbf4`.
+- Standalone baseline commit: `58d583ac9ea906f94f06d7ab437bfe0ccc1448a2`.
+- Repository validation commit: `1e5839e`.
+- Runtime packaging commit: `25b66e8`.
+- Transactional deployment/rollback commit: `be6972d`.
+- Deployment regression coverage commit: `d4df331`.
+- Preserved source/package SHA-256: `D33F43EA882480D60D2579E14133BE47F6ADA6BFC854AD2DA2750BD59318C93D`.
+- Repository validation: 57 checks passed, zero errors, zero warnings.
+- Sandbox coverage: junction, existing directory, clean install, both Dry Runs, receipt rollback, and seven negative/ambiguous-state groups passed.
+- Real-root Dry Run: passed with identical before/after protected fingerprints and no writes.
+- Real deployment: intentionally not performed during repository conversion.
+- Remaining boundary: user-approved real deployment, game WitcherScript compilation, and Section 19 runtime acceptance.
