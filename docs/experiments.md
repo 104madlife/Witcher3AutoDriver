@@ -868,3 +868,49 @@ Real game root result:
 - no real deployment occurred.
 
 Conclusion: standalone repository conversion is Confirmed at repository level. WitcherScript compilation and gameplay behavior remain runtime pending.
+
+## 2026-10-05: Remove failed NumPad4/5 experiments and StoryBoardUI coupling
+
+The NumPad4 Geralt-clone wander and NumPad5 NPC-camera features were judged unsuccessful and removed.
+
+Removal scope:
+
+- Removed both input listeners, event handlers, and public state-machine paths.
+- Removed the clone, moving-NPC search, game-camera follow, static-camera follow, smoothing, cleanup, and direct-target implementation state.
+- Removed the unused `AutoDriver_StaticCameraFollowNpc` state.
+- Removed both StoryBoardUI resource loads: `interactive_camera.w2ent` and `geralt_npc.w2ent`.
+- Removed NumPad4/5 bindings from both repository input templates.
+- Backed up the live user input file as `input.settings.backup-before-remove-AutoDriver-NumPad45-20261005`, then removed only the four NumPad4/5 AutoDriver bindings from the live file. Other NumPad4/5 bindings were preserved.
+- Removed the explicit `add(createStoryboardUi());` call from the local Bootstrap registry; `add(createAutoDriver());` remains.
+- Preserved installed StoryBoardUI, RadishSeeds, SharedImports, and their DLC packages because other Mods may still use them.
+
+Static verification:
+
+- No `StoryBoardUI`, `storyboardui`, clone/camera action, or `createStoryboardUi` reference remains in AutoDriver source, either input template, or the effective registry.
+- WitcherScript braces remain balanced.
+- Repository diff whitespace validation passes.
+
+Pending validation:
+
+- Launch the game and capture the WitcherScript compile result.
+- Confirm the AutoDriver startup HUD appears and NumPad2/3/6/7/8/9 still reach their handlers.
+
+## 2026-10-05: Validate feature removal and consolidate remaining implementation
+
+Runtime evidence supplied by the user after the NumPad4/5 removal:
+
+- WitcherScript compilation completed successfully at game launch.
+- Remaining AutoDriver hotkeys worked in the tested environment.
+
+Follow-up cleanup:
+
+- Consolidated input configuration into the single canonical `modAutoDriver.input.settings` file.
+- Preserved the expanded NumPad8/9 contexts and added NumPad2 to `Horse` and `Horse_Replacer_Ciri`.
+- Backed up the live input file as `input.settings.backup-before-canonical-AutoDriver-input-20261005` and added the same two horse-context bindings.
+- Removed `AutoDriver_TunedMovePointWander` and `AutoDriver_CustomSeekWander`, which had no registered input or current transition path.
+- Removed their parameters, target/progress state, helper functions, state loops, and `CAutoDriverMoveTRGSeek`.
+
+Pending validation:
+
+- Re-run game compilation after this second source cleanup.
+- Confirm NumPad2 while mounted and the remaining NumPad3/6/7/8/9 handlers.

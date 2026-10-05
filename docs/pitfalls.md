@@ -24,16 +24,16 @@ These entries record repeatable, evidence-backed traps. Their scope is AutoDrive
 - Evidence: 2026-06-01 input merge and subsequent binding diagnosis.
 - Last verified: 2026-06-01.
 
-## The two repository input files can drift
+## Duplicate repository input templates can drift
 
 - Game/runtime/language: repository packaging and Witcher 3 input contexts.
-- Applicable versions: current repository as of 2026-08-15.
+- Applicable versions: repository before the 2026-10-05 input consolidation.
 - Symptom: an action works in exploration but is absent from combat, swimming, boat, climbing, or another intended state.
-- Root cause: `AutoDriver.input.settings` and `modAutoDriver.input.settings` currently contain different state coverage.
-- Verified fix/avoidance: compare both files and the live profile before testing. Reconcile them only in a dedicated behavior change with state-by-state verification.
-- Misleading workaround: assuming the larger or newer-looking file is necessarily the one consumed by the current loader/profile.
-- Evidence: repository comparison on 2026-08-15.
-- Last verified: 2026-08-15.
+- Root cause: `AutoDriver.input.settings` and `modAutoDriver.input.settings` were maintained independently and accumulated different state coverage.
+- Verified fix/avoidance: keep only `modAutoDriver.input.settings` as the canonical template; validate every registered action against it and the live profile.
+- Misleading workaround: keep both files and rely on maintainers to update them together.
+- Evidence: repository comparison on 2026-08-15 and consolidation on 2026-10-05.
+- Last verified: static source review 2026-10-05; revised template needs a fresh game run.
 
 ## Latent calls cannot appear directly in a return or condition
 
@@ -112,16 +112,16 @@ These entries record repeatable, evidence-backed traps. Their scope is AutoDrive
 - Evidence: 2026-07-14 expanded-state teleport design and current source.
 - Last verified: source review 2026-08-15; affected runtime states still need validation.
 
-## StoryBoardUI resource paths are external dependencies
+## Failed reference-Mod experiments can become accidental hard dependencies
 
 - Game/runtime/language: Witcher 3 entity resource loading.
 - Applicable versions: current repository and installed StoryBoardUI reference.
-- Symptom: static camera or Geralt clone creation reports that its template cannot be loaded.
-- Root cause: AutoDriver references StoryBoardUI resources that are not contained in this repository.
-- Verified fix/avoidance: verify StoryBoardUI is installed and its resources are mounted before diagnosing AutoDriver entity creation.
-- Misleading workaround: treating the resource path as a vanilla game guarantee.
-- Evidence: camera/clone implementation and 2026-06-01/02 experiments.
-- Last verified: source review 2026-08-15.
+- Symptom: a core AutoDriver installation appears to require StoryBoardUI, RadishSeeds, or SharedImports even when the failed NumPad4/5 features are not used.
+- Root cause: the former implementation loaded StoryBoardUI camera/clone resources, while the shared Bootstrap registry also called `createStoryboardUi()` unconditionally.
+- Verified fix/avoidance: remove the failed feature code and resource loads, and keep the AutoDriver registry entry limited to `add(createAutoDriver());`.
+- Misleading workaround: leave the unconditional factory call in the registry and describe StoryBoardUI as optional.
+- Evidence: 2026-10-05 dependency audit and removal; current static scan contains no StoryBoardUI reference in AutoDriver source or registry.
+- Last verified: static source review 2026-10-05; reduced installation still needs in-game compilation after the latest cleanup.
 
 ## Copying into a junction-backed runtime path can mutate the source repository
 

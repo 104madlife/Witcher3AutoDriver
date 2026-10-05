@@ -6,10 +6,10 @@ Knowledge scaffold adopted: 2026-08-15
 ## Project Context
 
 - Game: The Witcher 3
-- Purpose: drive character, horse, camera, and teleport state changes for automated in-game visual-data collection experiments.
+- Purpose: drive character, horse, protection, and teleport state changes for automated in-game visual-data collection experiments.
 - Mod form: WitcherScript content Mod implemented as a bootstrapped `CMod` state machine.
 - Source entry point: `content/scripts/local/mod_autodriver.ws`.
-- Current status: standalone repository conversion is complete at repository level. History preservation, validation, runtime-only packaging, transactional sandbox deployment/rollback, and real-game-root Dry Run passed. Gameplay source remains unchanged; current-game compilation and runtime validation are still pending.
+- Current status: standalone repository conversion, runtime-only packaging, transactional sandbox deployment/rollback, and real-game-root Dry Run are complete. The user confirmed game compilation and remaining hotkeys after NumPad4/5 removal. The later input consolidation and unreachable-experiment cleanup require one fresh game validation, and the first real directory deployment is pending.
 - Mod identity in source: `AutoDriver`, author `104madlife`, version `0.1`.
 
 ## Development Environment
@@ -21,7 +21,7 @@ Knowledge scaffold adopted: 2026-08-15
 - Legacy repository location: `<game>/mods/AutoDriver`.
 - Runtime discovery path before first standalone deployment: `<game>/mods/modAutoDriver`, a directory junction targeting the legacy repository.
 - Vanilla script reference: `<game>/content/content0/scripts`.
-- External reference/dependency: StoryBoardUI. Its camera and Geralt-clone resources are required only by the corresponding experimental features.
+- External runtime dependency: Bootstrap scripts, registry integration, and the matching `dlcBootstrap` resources. The current AutoDriver source no longer references StoryBoardUI, RadishSeeds, or SharedImports.
 - No standalone WitcherScript compiler is currently available. Repository validation, packaging, and deployment regression tests are provided, but game launch remains the authoritative compile gate.
 
 ## Repository Layout
@@ -30,7 +30,6 @@ Knowledge scaffold adopted: 2026-08-15
 AutoDriver/
 ├── content/scripts/local/mod_autodriver.ws
 ├── baselines/legacy-current/
-├── AutoDriver.input.settings
 ├── modAutoDriver.input.settings
 ├── validate-project.ps1
 ├── package.ps1
@@ -43,6 +42,7 @@ AutoDriver/
 └── docs/
     ├── interface-matrix.md
     ├── experiments.md
+    ├── feature-dependency-audit.md
     └── pitfalls.md
 ```
 
@@ -78,9 +78,9 @@ These external files are not owned by this Git repository. Verify them before co
 
 ### Input configuration
 
-- Repository input files declare the `AutoDriver_*` actions.
+- `modAutoDriver.input.settings` is the single canonical input template and declares all current `AutoDriver_*` actions.
 - This installation previously required merging those bindings into the live user `input.settings`.
-- `AutoDriver.input.settings` and `modAutoDriver.input.settings` are currently not identical. Treat reconciliation as a behavior change requiring a separate validation task.
+- The canonical template includes NumPad2 in both horse contexts and NumPad8/9 in the supported combat, swimming, diving, boat, climbing, and scripted-action contexts.
 
 ### Launch / reload
 
@@ -108,22 +108,21 @@ These external files are not owned by this Git repository. Verify them before co
 | --- | --- | --- |
 | NumPad2 | `AutoDriver_HorseWander` | Mounted horse wander prototype |
 | NumPad3 | `AutoDriver_WalkWander` | Official-style player walk wander |
-| NumPad4 | `AutoDriver_DirectWander` | Geralt NPC clone wander and static camera |
-| NumPad5 | `AutoDriver_CameraFollowNpc` | Follow a nearby moving NPC, with static-camera fallback |
 | NumPad6 | `AutoDriver_ToggleHorse` | Summon/mount or dismount the player horse |
 | NumPad7 | `AutoDriver_GodMode` | Health invulnerability and marked equipment protection |
 | NumPad8 | `AutoDriver_OfficialTeleport` | Sequential official fast-travel traversal |
 | NumPad9 | `AutoDriver_RandomXYTeleport` | Validated random XY near a current-world road-sign anchor |
 
-Input availability varies by player state. The two repository input files currently declare different state coverage; consult both before runtime testing.
+Input availability varies by player state. Use `modAutoDriver.input.settings` as the only repository source for input coverage.
 
 ## Current Validation Boundary
 
-Confirmed historical observations include successful Mod bootstrap/HUD startup, live input activation, player movement through `ActionMoveTo(...)`, failure of direct moving-agent control on the player, and a working but jittery StoryBoardUI static-camera route.
+Confirmed historical observations include successful Mod bootstrap/HUD startup, live input activation, player movement through `ActionMoveTo(...)`, and failure of direct moving-agent control on the player. The NumPad4/5 clone and camera experiments were removed on 2026-10-05 after being judged unsuccessful.
 
 The latest implementation still needs revalidation for:
 
 - compilation after the latent verified local-teleport changes;
+- compilation after removal of NumPad4/5 and the StoryBoardUI resource references;
 - direct local teleport from combat, swimming, diving, boat, passenger, climbing, and scripted-action states;
 - cross-world teleport from those states;
 - horse toggle and mounted teleport preparation;
@@ -150,5 +149,5 @@ Do not promote these items to `Confirmed` merely because code exists. Update `do
 - `docs/pitfalls.md`: verified mistakes and avoidance rules.
 - `GOD_TELEPORT_DEVELOPMENT_PLAN.md`: design record for NumPad7/8/9 work.
 - `AGENT.md`: legacy focused notes retained for compatibility; durable lessons are also represented in `docs/pitfalls.md`.
-- StoryBoardUI installed Mod: reference for Bootstrap patterns, static camera resources, and Geralt NPC clone resources.
+- Historical StoryBoardUI experiments remain recorded in `docs/experiments.md`; StoryBoardUI is not a current AutoDriver dependency.
 - Vanilla game scripts: authoritative declarations for player, movement, vehicle, navigation, camera, inventory, and fast-travel interfaces.

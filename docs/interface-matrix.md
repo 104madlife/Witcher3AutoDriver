@@ -2,6 +2,10 @@
 
 This file is a reusable capability cache. Every entry is scoped to the recorded environment and must be revalidated when the game, loader, reference Mod, or implementation route changes.
 
+## Dependency audit addendum — 2026-10-05
+
+See [feature-dependency-audit.md](feature-dependency-audit.md) for the current feature inventory and deployment dependency evidence. On 2026-10-05, the failed NumPad4/5 clone and camera features, both StoryBoardUI resource loads, and the shared registry's explicit `createStoryboardUi()` call were removed. The user then confirmed successful game compilation and remaining hotkey delivery. Static inspection finds no StoryBoardUI, RadishSeeds, or SharedImports reference in AutoDriver source or its registry entry. Bootstrap scripts and `dlcBootstrap` remain required. Input configuration has since been consolidated into `modAutoDriver.input.settings`, with NumPad2 added to horse contexts. Removal of the later unreachable movement experiments still needs a fresh game compile.
+
 ## Evidence States
 
 - `Confirmed`: supported by authoritative declarations plus matching compile/runtime evidence.
@@ -20,8 +24,8 @@ This file is a reusable capability cache. Every entry is scoped to the recorded 
 | Drive player movement-agent values directly | `SetGameplayRelativeMoveSpeed(...)` + direction | Known-bad | 2026-06-01 |
 | Force official-style player movement | `CAIMoveToPoint` + `CAIPlayerActionDecorator` + `ForceAIBehavior(...)` | Probable | 2026-06-02 |
 | Find a local navigable target | navigation safe-spot/Z tests + moving-agent validity | Probable | 2026-07-12 |
-| Follow an NPC with a static camera | StoryBoardUI `interactive_camera.w2ent` + `CStaticCamera` | Confirmed, quality-limited | 2026-06-02 |
-| Spawn and drive a Geralt-like clone | StoryBoardUI `geralt_npc.w2ent` + `CAIMoveToPoint` | Probable | 2026-06-02 |
+| Retired NPC camera experiment | Removed NumPad5 path | Known-bad for the product goal; removed | 2026-10-05 |
+| Retired Geralt-clone experiment | Removed NumPad4 path | Known-bad for the product goal; removed | 2026-10-05 |
 | Identify and toggle the player horse | horse component/entity + riding-manager state | Probable | 2026-07-13 |
 | Enumerate and issue official teleport | `GetFastTravelPoints(...)` + local/global routes | Probable | 2026-07-14 |
 | Find validated random XY destinations | road-sign anchor + navigation/physics validation | Probable | 2026-07-12 |
@@ -41,12 +45,12 @@ This file is a reusable capability cache. Every entry is scoped to the recorded 
 ## Capability: Register and receive Mod input
 
 - Game/runtime: The Witcher 3, installed user profile.
-- Interface: `theInput.RegisterListener(this, handler, action)` plus action entries in Mod and live user input settings.
+- Interface: `theInput.RegisterListener(this, handler, action)` plus action entries in the canonical `modAutoDriver.input.settings` template and live user input settings.
 - Evidence state: Confirmed for this installation.
 - Ownership/lifecycle: listeners are registered by `CModAutoDriver.init()`.
-- Known limitations: Mod-local settings did not populate the existing live user file automatically. The two repository input files currently differ in state coverage.
-- Source: source `init()`, both `*.input.settings` files, and 2026-06-01 input experiment.
-- Last verified: 2026-06-01.
+- Known limitations: Mod-local settings did not populate the existing live user file automatically; installation still needs an explicit merge or equivalent input installer.
+- Source: source `init()`, `modAutoDriver.input.settings`, 2026-06-01 input experiment, and 2026-10-05 user validation.
+- Last verified: 2026-10-05.
 
 ## Capability: Move the real player with actor movement actions
 
@@ -87,25 +91,14 @@ This file is a reusable capability cache. Every entry is scoped to the recorded 
 - Source: vanilla world/navigation declarations; 2026-06-01 target experiments; 2026-07-12 implementation.
 - Last verified: source review 2026-08-15; broad runtime validation pending.
 
-## Capability: Follow a moving NPC with a static camera
+## Retired capabilities: NPC camera and Geralt clone
 
-- Game/runtime: StoryBoardUI resources installed and mounted.
-- Interface/resource: load `dlc/modtemplates/storyboardui/interactive_camera.w2ent`, create `CStaticCamera`, and update its transform.
-- Evidence state: Confirmed, with quality limitations.
-- Ownership/lifecycle: AutoDriver creates, activates, updates, and stops its camera when entering/leaving the camera state.
-- Known limitations: runtime follow worked but jittered; smoothing was implemented afterward and needs matching validation. Direct use of the top game camera failed when the object was `CCustomCamera` rather than `CCamera`.
-- Source: 2026-06-01/02 camera experiments; current source.
-- Last verified: 2026-06-02.
-
-## Capability: Spawn and drive a Geralt-like NPC clone
-
-- Game/runtime: StoryBoardUI DLC resources installed and mounted.
-- Interface/resource: `dlc/modtemplates/storyboardui/geralt_npc.w2ent`, `theGame.CreateEntity(...)`, `CAIMoveToPoint`, and `ForceAIBehavior(...)`.
-- Evidence state: Probable.
-- Ownership/lifecycle: the clone is tagged as `AutoDriverClone`, driven while the state is active, and destroyed on cleanup.
-- Known limitations: the current route does not clone the player's equipment/appearance through StoryBoardUI's full clone path. Runtime success is not recorded.
-- Source: StoryBoardUI `storyboardasset.ws`; 2026-06-02 experiment; current source.
-- Last verified: implementation review 2026-08-15; runtime pending.
+- Game/runtime: Witcher 3 installed environment with StoryBoardUI resources.
+- Former interfaces/resources: `interactive_camera.w2ent`, `geralt_npc.w2ent`, `CStaticCamera`, entity creation, and scripted NPC movement.
+- Evidence state: Known-bad for the AutoDriver product goal; removed by user decision on 2026-10-05.
+- Removal scope: input listeners, handlers, state machines, camera/clone state, helper functions, resource loads, input bindings, and the registry's explicit StoryBoardUI factory call.
+- Historical evidence: the static camera route ran with quality limitations; the clone route never reached accepted runtime behavior. Details remain in `experiments.md` and Git history.
+- Current boundary: no StoryBoardUI resource or API reference remains in AutoDriver source. In-game compilation of the reduced implementation is pending.
 
 ## Capability: Identify and toggle the player horse
 
