@@ -934,4 +934,33 @@ Deployment result:
 - Preserved the development repository and its `.git` directory.
 - Wrote deployment receipt `build/deployments/deployment-20261005-210431-756.json` for verified rollback.
 
-The directory conversion is Confirmed. Game compilation of the post-cleanup source remains runtime pending.
+The directory conversion is Confirmed.
+
+## 2026-10-05: Confirm final reduced implementation in game
+
+Runtime evidence supplied by the user after input consolidation and removal of the unreachable tuned/custom movement experiments:
+
+- WitcherScript compilation completed successfully.
+- The current AutoDriver functions worked normally in the tested environment.
+
+This confirms the compile/runtime gate for the final reduced implementation on the current machine. Broad edge-case coverage for teleport destinations, traversal states, horse transitions, and protection behavior remains scoped separately in the interface matrix.
+
+## 2026-10-05: Vendor Bootstrap for private portable installation
+
+Goal:
+
+- allow an AI on a new machine to configure the complete current AutoDriver loading stack from one private repository checkout;
+- avoid machine-specific absolute paths in scripts and committed configuration;
+- preserve existing compatible shared dependencies and registry entries.
+
+Implementation:
+
+- Added the verified Bootstrap 0.5 Next-Gen `modBootstrap`, `modBootstrap-registry`, and `dlcBootstrap` payload under `external/Bootstrap/game-root`.
+- Changed packaging to produce a complete game-root tree and a SHA-256 record for every AutoDriver and Bootstrap file.
+- Changed deployment to install missing Bootstrap Mod/DLC components, reuse exact matching components, and refuse differing installed files before mutation.
+- Added an incremental, backed-up registry merge that preserves other Mod factory calls and guarantees exactly one `add(createAutoDriver());` entry.
+- Added an idempotent, backed-up merge of the canonical AutoDriver bindings into the selected live user input file.
+- Extended deployment receipts and rollback to cover dependencies, registry, user input, and the AutoDriver runtime.
+- Added `docs/new-machine-setup.md` with explicit path-discovery and ambiguity-handling instructions for the AI operating the new machine.
+
+The repository intentionally records no new-machine game-root or profile path. Generated deployment receipts contain the paths selected at execution time.

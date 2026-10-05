@@ -1,14 +1,14 @@
 # AutoDriver 功能与依赖审计
 
-审计日期：2026-10-05。范围：当前源码、两份按键模板、本机 Bootstrap 注册表、原版脚本和已安装的参考 Mod。游戏版本为 `4.0.0.103190(Build Machine)`。
+审计日期：2026-10-05。范围：当前源码、规范按键模板、Bootstrap 注册表、原版脚本和已安装的参考 Mod。游戏版本为 `4.0.0.103190(Build Machine)`。
 
-NumPad4 分身漫游和 NumPad5 NPC 镜头功能已经判定开发失败，并从当前实现中移除。下面描述移除后的状态。静态验证已经完成；当前版本仍需通过游戏启动时的 WitcherScript 编译和游戏内验收。
+NumPad4 分身漫游和 NumPad5 NPC 镜头功能已经判定开发失败，并从当前实现中移除。下面描述移除后的状态。用户已确认最终精简版本可通过游戏 WitcherScript 编译，当前功能运行正常。
 
 ## 1. 当前功能
 
 | 按键 | 当前功能 | AutoDriver 之外的功能依赖 | 主要限制 |
 | --- | --- | --- | --- |
-| NumPad2 | 已骑马时，让当前坐骑随机移动 | 未发现；使用原版 `ActionMoveTo` | 两份模板的 Horse 段均未绑定 NumPad2，输入覆盖需要后续修正 |
+| NumPad2 | 已骑马时，让当前坐骑随机移动 | 未发现；使用原版 `ActionMoveTo` | 规范模板和部署合并均覆盖 Horse 与 Horse_Replacer_Ciri |
 | NumPad3 | 控制真实玩家随机移动，卡住、到达或超时后换目标 | 未发现；使用原版导航和玩家 AI 行为 | 需要下马；默认速度 1.0 在实现中对应 `MT_FastRun` |
 | NumPad6 | 召唤附近马匹并上马，或从当前马匹下马 | 未发现；使用原版骑乘接口 | 战斗、室内、空中、游泳、潜水和船只等状态会阻止上马 |
 | NumPad7 | 切换生命无敌，并保护当前背包内有耐久的物品 | 未发现；使用原版无敌和物品能力 | 不修复已有损坏；新物品需要重新开关；氧气只在开启时补充一次 |
@@ -52,11 +52,12 @@ dlc\modtemplates\storyboardui\geralt_npc.w2ent
 2. 仓库已经只保留 `modAutoDriver.input.settings`，其中包含完整的 NumPad8/9 状态覆盖和两种 Horse 状态的 NumPad2。
 3. 当前安装历史表明，按键还需要合并进用户目录的 `Documents/The Witcher 3/input.settings`；只放 Mod 内模板不一定生效。
 4. 当前没有仓库内独立编译工具，实际编译门槛仍是启动游戏。
+5. Bootstrap 0.5 Next-Gen 的完整运行文件已放入 `external/Bootstrap/game-root`，供私有仓库打包和新机器安装使用。
 
 ## 5. 建议顺序
 
-1. 对删除无入口实验状态后的源码再执行一次游戏编译和按键冒烟测试。
-2. 在另一台电脑上验证最小组合：原版游戏、Bootstrap、Bootstrap registry、AutoDriver 和正确的用户按键。先验证加载，再逐项验证功能。
+1. 在另一台电脑上按 `docs/new-machine-setup.md` 运行完整打包、Dry Run 和部署。
+2. 验证最小组合：原版游戏、仓库内 Bootstrap、Bootstrap registry、AutoDriver 和部署脚本合并的用户按键。
 
 ## 6. 本次验证
 
@@ -71,4 +72,4 @@ dlc\modtemplates\storyboardui\geralt_npc.w2ent
 - 部署后源码与运行文件 SHA-256 均为 `A20F4C751FF931DF75B8C939B9A5C37010855113F68096F90CC404D8B94755BC`，Bootstrap 注册表和用户输入文件哈希在部署前后未变化。
 - 静态搜索未发现 AutoDriver 源码、规范按键模板或有效注册表仍引用 StoryBoardUI、分身或镜头动作。
 - WitcherScript 花括号数量一致，Git diff 空白检查通过。
-- NumPad4/5 清理版本已通过用户的游戏编译验证；之后删除的无入口实验代码仍需再次启动游戏确认。
+- 最终版本已通过用户的游戏编译和当前功能验证。

@@ -1,10 +1,12 @@
 # The Witcher 3 AutoDriver Standalone Repository Migration Plan
 
-Status: repository conversion complete; feature/dependency cleanup integrated; first real deployment and post-cleanup game validation pending
+Status: repository conversion, first real deployment, feature/dependency cleanup, and post-cleanup game validation complete
 
 Plan date: 2026-09-02
 
 > Scope change: NumPad4/5 and their StoryBoardUI resource dependencies were removed on 2026-10-05, and the shared registry no longer calls `createStoryboardUi()`. Historical baseline hashes below describe the pre-cleanup source. Current validation, packaging, deployment, and acceptance use the reduced feature set and the canonical `modAutoDriver.input.settings`; see `feature-dependency-audit.md`.
+
+> Packaging update: Bootstrap 0.5 Next-Gen is now vendored under `external/Bootstrap` for private portable installation. The historical migration phases below intentionally describe the earlier AutoDriver-only package and verify-only integration boundary.
 
 Legacy repository:
 

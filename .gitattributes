@@ -1,6 +1,9 @@
 # Preserve the legacy WitcherScript and input fragments byte-for-byte.
 *.ws -text
 *.settings -text
+*.bundle binary
+*.store binary
+*.w3strings binary
 
 # Keep authored repository metadata stable across Windows checkouts.
 *.md text eol=lf

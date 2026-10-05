@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "name": "Community Patch - Bootstrap and Utilities",
+  "version": "0.5-NEXT-GEN",
+  "sourceUrl": "https://www.nexusmods.com/witcher3/mods/2109",
+  "gameRootPayload": "game-root",
+  "components": [
+    "mods/modBootstrap",
+    "mods/modBootstrap-registry",
+    "dlc/dlcBootstrap"
+  ],
+  "registrationMode": "CModRegistry",
+  "note": "Vendored for private, reproducible AutoDriver installation. Do not publish without permission from the Bootstrap author."
+}

@@ -9,7 +9,7 @@ Knowledge scaffold adopted: 2026-08-15
 - Purpose: drive character, horse, protection, and teleport state changes for automated in-game visual-data collection experiments.
 - Mod form: WitcherScript content Mod implemented as a bootstrapped `CMod` state machine.
 - Source entry point: `content/scripts/local/mod_autodriver.ws`.
-- Current status: standalone repository conversion, runtime-only packaging, transactional deployment/rollback, and the first real directory deployment are complete. The user confirmed game compilation and remaining hotkeys after NumPad4/5 removal. The later input consolidation and unreachable-experiment cleanup require one fresh game validation.
+- Current status: standalone conversion, transactional deployment/rollback, real-directory deployment, input consolidation, and unreachable-experiment cleanup are complete. The user confirmed that the final reduced implementation compiles and its current functions work in game. Bootstrap 0.5 Next-Gen is now vendored for private portable installation.
 - Mod identity in source: `AutoDriver`, author `104madlife`, version `0.1`.
 
 ## Development Environment
@@ -20,7 +20,7 @@ Knowledge scaffold adopted: 2026-08-15
 - Development repository location on the current host: `<game>/mods/AutoDriver`.
 - Runtime discovery path: `<game>/mods/modAutoDriver`, now a real directory containing only the packaged runtime source.
 - Vanilla script reference: `<game>/content/content0/scripts`.
-- External runtime dependency: Bootstrap scripts, registry integration, and the matching `dlcBootstrap` resources. The current AutoDriver source no longer references StoryBoardUI, RadishSeeds, or SharedImports.
+- Runtime dependency: Bootstrap scripts, registry integration, and the matching `dlcBootstrap` resources. A verified copy is stored under `external/Bootstrap` for private installation. The current AutoDriver source does not reference StoryBoardUI, RadishSeeds, or SharedImports.
 - No standalone WitcherScript compiler is currently available. Repository validation, packaging, and deployment regression tests are provided, but game launch remains the authoritative compile gate.
 
 ## Repository Layout
@@ -28,6 +28,7 @@ Knowledge scaffold adopted: 2026-08-15
 ```text
 AutoDriver/
 ├── content/scripts/local/mod_autodriver.ws
+├── external/Bootstrap/game-root/
 ├── baselines/legacy-current/
 ├── modAutoDriver.input.settings
 ├── validate-project.ps1
@@ -42,6 +43,7 @@ AutoDriver/
     ├── interface-matrix.md
     ├── experiments.md
     ├── feature-dependency-audit.md
+    ├── new-machine-setup.md
     └── pitfalls.md
 ```
 
@@ -49,13 +51,14 @@ The established Witcher 3 source and input layout is authoritative. Do not move 
 
 ## Runtime Integration
 
-AutoDriver relies on integration outside this repository:
+AutoDriver relies on these installed components, all prepared by the repository deployment workflow:
 
 1. `<game>/mods/modAutoDriver` must contain the packaged runtime source. Before the first standalone deployment it is a junction to the legacy repository; afterward it becomes a real runtime-only directory.
-2. `<game>/mods/modBootstrap-registry/content/scripts/local/mods_registry.ws` must register `add(createAutoDriver());`.
-3. Input actions may need to be merged into `<documents>/The Witcher 3/input.settings`; preserve a backup before editing the live user file.
+2. `<game>/mods/modBootstrap` and `<game>/dlc/dlcBootstrap` must match the vendored Bootstrap 0.5 Next-Gen payload.
+3. `<game>/mods/modBootstrap-registry/content/scripts/local/mods_registry.ws` must register `add(createAutoDriver());` exactly once.
+4. The canonical input actions must be present in `<documents>/The Witcher 3/input.settings`.
 
-These external files are not owned by this Git repository. Verify them before concluding that a source change failed.
+Bootstrap and the registry are shared at runtime. Deployment installs them when absent, verifies compatible existing copies, and backs up shared files before an AutoDriver-specific edit.
 
 ## Working Procedures
 
@@ -68,17 +71,17 @@ These external files are not owned by this Git repository. Verify them before co
 
 ### Package / deploy
 
-- Run `package.ps1` to produce a runtime-only package without touching the game.
-- Run `deploy.ps1 -GameRoot <path> -DryRun` before any real deployment.
+- Run `package.ps1` to produce a private portable package containing AutoDriver and its Bootstrap dependency without touching the game.
+- Run `deploy.ps1 -GameRoot <path> -UserInputPath <path> -DryRun` before any real deployment.
 - Run `tests/test-deployment.ps1` after changing packaging, deployment, or rollback behavior.
 - The first real standalone deployment replaces only the verified `modAutoDriver` junction entry with a real runtime-only directory; it never mutates the junction target.
-- Verify Bootstrap registration and user input rather than overwriting their shared files.
+- Reuse an installed Bootstrap only when its expected files match. Merge the AutoDriver registry entry and input bindings transactionally instead of replacing unrelated settings.
 - Do not commit machine-specific absolute paths when `<game>` and `<documents>` placeholders are sufficient.
 
 ### Input configuration
 
 - `modAutoDriver.input.settings` is the single canonical input template and declares all current `AutoDriver_*` actions.
-- This installation previously required merging those bindings into the live user `input.settings`.
+- Deployment removes stale AutoDriver lines and merges the canonical bindings into the live user `input.settings`.
 - The canonical template includes NumPad2 in both horse contexts and NumPad8/9 in the supported combat, swimming, diving, boat, climbing, and scripted-action contexts.
 
 ### Launch / reload
@@ -97,9 +100,8 @@ These external files are not owned by this Git repository. Verify them before co
 
 - Stop AutoDriver-owned state before testing another movement mode.
 - The code should remove only equipment modifiers marked with `AutoDriverIndestructible`.
-- Restore the backed-up live input file if input merging must be rolled back.
-- Use `restore-deployment.ps1` with the exact receipt for runtime rollback. The first rollback can recreate the recorded legacy junction.
-- Bootstrap and user-input files are verify-only external state and are never changed by core deployment or rollback.
+- Use `restore-deployment.ps1` with the exact receipt to restore the prior AutoDriver runtime, registry, and live input file.
+- Bootstrap components are removed on rollback only when that receipt proves the deployment installed them; pre-existing matching components remain untouched.
 
 ## Current Input Semantics
 
@@ -118,10 +120,7 @@ Input availability varies by player state. Use `modAutoDriver.input.settings` as
 
 Confirmed historical observations include successful Mod bootstrap/HUD startup, live input activation, player movement through `ActionMoveTo(...)`, and failure of direct moving-agent control on the player. The NumPad4/5 clone and camera experiments were removed on 2026-10-05 after being judged unsuccessful.
 
-The latest implementation still needs revalidation for:
-
-- compilation after removal of the unreachable tuned/custom movement experiments;
-- mounted NumPad2 delivery after canonical input consolidation;
+The final reduced implementation and current hotkeys have passed user game validation. Broader scenario coverage is still incomplete for:
 - direct local teleport from combat, swimming, diving, boat, passenger, climbing, and scripted-action states;
 - cross-world teleport from those states;
 - horse toggle and mounted teleport preparation;

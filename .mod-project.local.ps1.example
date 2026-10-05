@@ -1,4 +1,4 @@
 # Copy this file to .mod-project.local.ps1 and edit the local paths.
 # The local file is intentionally ignored by Git.
-$Witcher3AutoDriverGameRoot = "E:\SteamLibrary\steamapps\common\The Witcher 3"
-$Witcher3AutoDriverUserInputPath = "C:\Users\64617\Documents\The Witcher 3\input.settings"
+$Witcher3AutoDriverGameRoot = "<replace-with-the-game-root-containing-bin-mods-and-dlc>"
+$Witcher3AutoDriverUserInputPath = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "The Witcher 3\input.settings"
