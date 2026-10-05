@@ -1,6 +1,6 @@
 # The Witcher 3 AutoDriver
 
-AutoDriver is a WitcherScript state-machine Mod used for automated character, horse, camera, protection, and teleport experiments in The Witcher 3.
+AutoDriver is a WitcherScript state-machine Mod used for automated character, horse, protection, and teleport experiments in The Witcher 3.
 
 This repository is the standalone development source. The game-facing runtime name remains `modAutoDriver`.
 
@@ -10,9 +10,10 @@ This repository is the standalone development source. The game-facing runtime na
 - `modBootstrap` and `modBootstrap-registry`.
 - Exactly one `add(createAutoDriver());` registration in the effective Bootstrap registry.
 - User input bindings for the `AutoDriver_*` actions.
-- `modStoryboardUi` plus `dlcStoryboardUi` for the camera and Geralt-clone features.
 
-Bootstrap, StoryBoardUI, vanilla scripts, and the user's `input.settings` are external dependencies. This repository does not vendor or overwrite them.
+Bootstrap, vanilla scripts, and the user's `input.settings` are external dependencies. StoryBoardUI, RadishSeeds, and SharedImports are not required by the current AutoDriver implementation.
+
+`modAutoDriver.input.settings` is the only input template. It includes the supported expanded teleport contexts and NumPad2 in both horse contexts. Merge it into the live user input configuration using the installation method appropriate for the target setup.
 
 ## Repository validation
 
@@ -69,4 +70,4 @@ For the first migration deployment, rollback removes only the verified deployed 
 
 No standalone WitcherScript compiler was found during migration. The authoritative compile gate is the game's script compilation at launch. Repository validation and packaging success do not prove gameplay behavior.
 
-See [docs/standalone-migration-plan.md](docs/standalone-migration-plan.md) for the evidence boundary, deployment design, rollback rules, and complete NumPad2–9 acceptance checklist.
+See [docs/standalone-migration-plan.md](docs/standalone-migration-plan.md) for the evidence boundary, deployment design, rollback rules, and current NumPad2/3/6/7/8/9 acceptance checklist.

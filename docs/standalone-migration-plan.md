@@ -96,11 +96,11 @@ Repository migration must not promote these runtime-pending capabilities to `Con
 - Preserve the complete existing Git object database, branches and commit history.
 - Create `D:\workspace\ModDev\Witcher3AutoDriver` as the development repository.
 - Establish `main` at the current standardized commit while retaining historical branch pointers.
-- Preserve the current source and both input files byte-for-byte during raw migration.
+- Preserve the migration baseline byte-for-byte, then make later feature cleanup auditable in normal Git commits.
 - Add README, migration receipts, local configuration example, validation, packaging, deployment and rollback workflows.
 - Package only AutoDriver-owned runtime content.
 - Detect and safely migrate the current `modAutoDriver` junction to a real deployed directory.
-- Validate external Bootstrap, StoryBoardUI and user-input state without taking ownership of them.
+- Validate external Bootstrap and user-input state without taking ownership of them.
 - Test deployment and rollback in sandboxes before touching the real game installation.
 - Run a real-root Dry Run with zero writes.
 - Leave a user-executed in-game acceptance checklist.
@@ -108,9 +108,8 @@ Repository migration must not promote these runtime-pending capabilities to `Con
 ### Out of scope for the first migration
 
 - Refactoring `mod_autodriver.ws`.
-- Fixing or redesigning movement, camera, horse, god-mode or teleport behavior.
-- Reconciling the two input files as a behavior change.
-- Vendoring `modBootstrap`, `modBootstrap-registry`, `modStoryboardUi` or vanilla scripts.
+- Fixing or redesigning the retained movement, horse, god-mode or teleport behavior.
+- Vendoring `modBootstrap`, `modBootstrap-registry` or vanilla scripts.
 - Automatically overwriting the shared Bootstrap registry.
 - Automatically rewriting the live user `input.settings`.
 - Installing a third-party WitcherScript compiler or Mod toolchain.
@@ -122,7 +121,6 @@ Repository migration must not promote these runtime-pending capabilities to `Con
 
 ```text
 content\scripts\local\mod_autodriver.ws
-AutoDriver.input.settings
 modAutoDriver.input.settings
 PROJECT.md
 README.md
@@ -148,7 +146,6 @@ Only files listed in a generated package manifest are deployment-owned. Deployme
 ```text
 <game>\mods\modBootstrap
 <game>\mods\modBootstrap-registry
-<game>\mods\modStoryboardUi
 <game>\mods\modBootstrap-registry\content\scripts\local\mods_registry.ws
 <documents>\The Witcher 3\input.settings
 <game>\content\content0\scripts
@@ -172,7 +169,6 @@ Witcher3AutoDriver/
 │   ├── experiments.md
 │   ├── pitfalls.md
 │   └── legacy/
-├── AutoDriver.input.settings
 ├── modAutoDriver.input.settings
 ├── validate-project.ps1
 ├── package.ps1
@@ -190,19 +186,9 @@ Generated packages, receipts and sandbox directories must be Git-ignored.
 
 ## 7. Input-File Policy
 
-The two repository input files are intentionally not identical:
+`modAutoDriver.input.settings` is the single canonical repository template. It contains every registered action, the expanded NumPad8/9 state coverage formerly present only in `AutoDriver.input.settings`, and NumPad2 in both horse contexts. The obsolete duplicate template was deleted after its historical hash was recorded in the migration baseline.
 
-- `AutoDriver.input.settings` includes additional NumPad8/9 bindings for Combat, Ciri Combat, Swimming, Diving, Boat, BoatPassenger, JumpClimb and ScriptedAction.
-- `modAutoDriver.input.settings` omits those expanded-state bindings.
-
-For the first migration:
-
-1. Preserve both files byte-for-byte.
-2. Record both hashes in the baseline manifest.
-3. Do not select a new canonical file by silently deleting or rewriting the other.
-4. Validation may compare them and report the exact state-coverage difference.
-5. Deployment may inspect live `input.settings`, but must not merge or deduplicate it.
-6. Input reconciliation must be a later, separately tested behavior change.
+Core runtime deployment verifies the live `input.settings` but does not overwrite it. User-profile changes remain a separately backed-up integration operation.
 
 ## 8. External Dependency Policy
 
@@ -211,16 +197,9 @@ For the first migration:
 - `modBootstrap` must be installed.
 - `modBootstrap-registry` must compile with `add(createAutoDriver());` present exactly once in the effective registry.
 
-### Feature-scoped dependency
+### Removed feature dependency
 
-`modStoryboardUi` supplies:
-
-```text
-dlc\modtemplates\storyboardui\interactive_camera.w2ent
-dlc\modtemplates\storyboardui\geralt_npc.w2ent
-```
-
-The camera-follow and Geralt-clone paths depend on these resources. Missing StoryBoardUI must be reported as a feature-level dependency failure, not confused with core source migration failure.
+The retired NumPad4/5 camera and Geralt-clone experiments formerly loaded StoryBoardUI resources. Those features and resource references have been removed. StoryBoardUI, RadishSeeds, and SharedImports are not current AutoDriver dependencies.
 
 ### User profile integration
 
@@ -229,9 +208,9 @@ The live `input.settings` is user-owned shared state. Validation must report:
 - presence of every `AutoDriver_*` action;
 - contexts in which each action appears;
 - duplicate bindings;
-- differences from each repository input template.
+- differences from the canonical repository input template.
 
-No automatic mutation is permitted in the first migration.
+Core deployment does not mutate the live file.
 
 ## 9. Phase 0 — Preflight and Freeze
 
@@ -295,14 +274,13 @@ Implement `validate-project.ps1` as a read-only validator. It must:
 2. Verify the source hash when running in baseline-preservation mode.
 3. Confirm one `createAutoDriver()` factory and the expected `CModAutoDriver` definition.
 4. Enumerate `theInput.RegisterListener` action names.
-5. Compare registered actions with both repository input files.
-6. Report input-template drift without rewriting either file.
-7. Identify StoryBoardUI resource references.
+5. Compare registered actions with the canonical repository input file.
+6. Reject unexpected input actions and require NumPad2 in both horse contexts.
+7. Reject current StoryBoardUI resource references.
 8. When `-GameRoot` is supplied, verify:
    - DX11/DX12 game executable versions;
    - Bootstrap and Bootstrap registry presence;
    - exactly one effective `add(createAutoDriver());` line;
-   - StoryBoardUI presence and referenced resources;
    - the type and target of any existing `modAutoDriver` path.
 9. When `-UserInputPath` is supplied, summarize live action coverage and duplicates.
 10. Emit an ignored JSON validation receipt.
@@ -352,8 +330,7 @@ Implement `deploy.ps1` with explicit `-GameRoot` and `-DryRun` support.
 - Resolve and validate the absolute game root.
 - Verify the package manifest and every source hash.
 - Verify required Bootstrap registration before mutation.
-- Treat StoryBoardUI absence as a clear feature dependency warning unless a selected validation policy makes it fatal.
-- Never modify Bootstrap, StoryBoardUI, vanilla scripts or user settings.
+- Never modify Bootstrap, third-party Mods, vanilla scripts or user settings.
 - Write a deployment receipt containing previous state, new state and hashes.
 - On any failure after mutation begins, perform bounded rollback.
 
@@ -414,7 +391,7 @@ For the first junction-to-directory deployment, rollback must:
 
 For later real-directory deployments, rollback must restore the prior owned files from timestamped backups instead of recreating a junction.
 
-Rollback must not touch Bootstrap, StoryBoardUI, vanilla scripts or user input configuration.
+Rollback must not touch Bootstrap, third-party Mods, vanilla scripts or user input configuration.
 
 ## 16. Phase 7 — Sandbox Verification
 
@@ -456,7 +433,7 @@ All negative cases must fail before mutation where possible.
 
 Against the real game installation:
 
-1. Fingerprint the current junction, its target, Bootstrap registry, StoryBoardUI resource paths and user input file.
+1. Fingerprint the current junction, its target, Bootstrap registry and user input file.
 2. Run deployment Dry Run.
 3. Recompute the same fingerprints.
 4. Require byte-identical external files and unchanged link metadata.
@@ -489,12 +466,10 @@ Test one primary behavior at a time and preserve exact observations.
 - [ ] No duplicate Mod instance or duplicate input callback is observed.
 - [ ] Stopping each mode cleans up AutoDriver-owned state.
 
-### Movement and camera
+### Movement
 
 - [ ] NumPad2 horse wander starts, retargets and stops.
 - [ ] NumPad3 player walk wander starts, recovers from a stuck target and stops.
-- [ ] NumPad4 Geralt clone creation/wander/cleanup works with StoryBoardUI installed.
-- [ ] NumPad5 NPC follow or documented static-camera fallback works and cleans up.
 
 ### Horse and protection
 
@@ -533,7 +508,7 @@ Classify failures before changing code:
 | Repository validation | Missing paths, action mismatch, malformed source/package manifest |
 | Packaging | Wrong staged path or hash |
 | Deployment | Junction/backup/copy/receipt failure |
-| External integration | Missing Bootstrap registration, input action or StoryBoardUI resource |
+| External integration | Missing Bootstrap registration or input action |
 | Game compilation | Exact WitcherScript compiler error |
 | Mod initialization | Compile succeeds but startup HUD is absent |
 | Input delivery | Mod loads but a registered action is not received in a specific context |
@@ -586,7 +561,7 @@ Repository conversion is complete only when:
 - [x] Sandbox rollback restores the exact previous state in every case.
 - [x] Negative paths reject unsafe or ambiguous operations.
 - [x] Real-game-root Dry Run succeeds with zero writes.
-- [x] Bootstrap, StoryBoardUI, vanilla scripts and user settings remain unmodified.
+- [x] Bootstrap, third-party Mods, vanilla scripts and user settings remain unmodified.
 - [x] The new repository working tree is clean with separated migration commits.
 - [x] The user receives exact deploy, rollback and in-game acceptance instructions.
 

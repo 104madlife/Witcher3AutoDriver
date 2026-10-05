@@ -79,9 +79,10 @@ function Get-InputActionSummary {
 
 $requiredFiles = @(
     "content\scripts\local\mod_autodriver.ws",
-    "AutoDriver.input.settings",
     "modAutoDriver.input.settings",
     "PROJECT.md",
+    "README.md",
+    "docs\feature-dependency-audit.md",
     "docs\interface-matrix.md",
     "docs\experiments.md",
     "docs\pitfalls.md",
@@ -103,8 +104,6 @@ Add-ValidationCheck -Name "class:CModAutoDriver" -Passed ($classCount -eq 1) -De
 $expectedActions = @(
     "AutoDriver_HorseWander",
     "AutoDriver_WalkWander",
-    "AutoDriver_DirectWander",
-    "AutoDriver_CameraFollowNpc",
     "AutoDriver_ToggleHorse",
     "AutoDriver_GodMode",
     "AutoDriver_OfficialTeleport",
@@ -122,10 +121,11 @@ foreach ($action in $expectedActions) {
 }
 
 $unexpectedActions = @($registeredActions | Where-Object { $expectedActions -notcontains $_ })
-Add-ValidationCheck -Name "source-actions:unexpected" -Passed ($unexpectedActions.Count -eq 0) -Detail (($unexpectedActions -join ", ") -replace '^$', '<none>') -Severity warning
+Add-ValidationCheck -Name "source-actions:unexpected" -Passed ($unexpectedActions.Count -eq 0) -Detail (($unexpectedActions -join ", ") -replace '^$', '<none>')
 
 $inputSummaries = [ordered]@{}
-foreach ($inputName in @("AutoDriver.input.settings", "modAutoDriver.input.settings")) {
+$canonicalInputName = "modAutoDriver.input.settings"
+foreach ($inputName in @($canonicalInputName)) {
     $inputPath = Join-Path $projectRoot $inputName
     if (-not (Test-Path -LiteralPath $inputPath)) {
         continue
@@ -137,21 +137,26 @@ foreach ($inputName in @("AutoDriver.input.settings", "modAutoDriver.input.setti
     foreach ($action in $expectedActions) {
         Add-ValidationCheck -Name "${inputName}:$action" -Passed ($actions -contains $action) -Detail "declared=$($actions -contains $action)"
     }
+
+    $unexpectedInputActions = @($actions | Where-Object { $expectedActions -notcontains $_ })
+    Add-ValidationCheck -Name "${inputName}:unexpected" -Passed ($unexpectedInputActions.Count -eq 0) -Detail (($unexpectedInputActions -join ", ") -replace '^$', '<none>')
+
+    $horseWander = @($summary | Where-Object { $_.action -eq "AutoDriver_HorseWander" })
+    $horseContexts = if ($horseWander.Count -eq 1) { @($horseWander[0].contexts) } else { @() }
+    foreach ($context in @("Horse", "Horse_Replacer_Ciri")) {
+        Add-ValidationCheck -Name "${inputName}:AutoDriver_HorseWander:$context" -Passed ($horseContexts -contains $context) -Detail "declared=$($horseContexts -contains $context)"
+    }
 }
 
-$expandedPath = Join-Path $projectRoot "AutoDriver.input.settings"
-$compactPath = Join-Path $projectRoot "modAutoDriver.input.settings"
-if ((Test-Path -LiteralPath $expandedPath) -and (Test-Path -LiteralPath $compactPath)) {
-    $sameInputHash = (Get-Sha256 $expandedPath) -eq (Get-Sha256 $compactPath)
-    Add-ValidationCheck -Name "input-template-drift" -Passed (-not $sameInputHash) -Detail "Expected preserved drift: files are intentionally different" -Severity info
-}
+$obsoleteInputPath = Join-Path $projectRoot "AutoDriver.input.settings"
+Add-ValidationCheck -Name "input-template:single-canonical" -Passed (-not (Test-Path -LiteralPath $obsoleteInputPath)) -Detail "obsolete template absent=$(-not (Test-Path -LiteralPath $obsoleteInputPath))"
 
 $storyboardReferences = @(
     [regex]::Matches($source, 'dlc\\modtemplates\\storyboardui\\[^"\r\n]+') |
         ForEach-Object { $_.Value } |
         Sort-Object -Unique
 )
-Add-ValidationCheck -Name "storyboard-resource-references" -Passed ($storyboardReferences.Count -eq 2) -Detail ($storyboardReferences -join ", ") -Severity warning
+Add-ValidationCheck -Name "storyboard-resource-references" -Passed ($storyboardReferences.Count -eq 0) -Detail (($storyboardReferences -join ", ") -replace '^$', '<none>')
 
 if ($BaselinePreservation) {
     $baseline = Get-Content -Raw -LiteralPath (Join-Path $projectRoot "baselines\legacy-current\manifest.json") | ConvertFrom-Json
@@ -173,8 +178,6 @@ if ($GameRoot) {
         executables = [System.Collections.Generic.List[object]]::new()
         runtimeDestination = $null
         bootstrapRegistrationCount = 0
-        storyboardModInstalled = $false
-        storyboardDlcInstalled = $false
     }
 
     foreach ($relativeExe in @("bin\x64\witcher3.exe", "bin\x64_dx12\witcher3.exe")) {
@@ -203,13 +206,6 @@ if ($GameRoot) {
         $gameEvidence.bootstrapRegistrationCount = $registrationCount
         Add-ValidationCheck -Name "bootstrap:autoDriver-registration" -Passed ($registrationCount -eq 1) -Detail "count=$registrationCount"
     }
-
-    $storyboardMod = Join-Path $resolvedGameRoot "mods\modStoryboardUi"
-    $storyboardDlc = Join-Path $resolvedGameRoot "dlc\dlcStoryboardUi\content\blob0.bundle"
-    $gameEvidence.storyboardModInstalled = Test-Path -LiteralPath $storyboardMod -PathType Container
-    $gameEvidence.storyboardDlcInstalled = Test-Path -LiteralPath $storyboardDlc -PathType Leaf
-    Add-ValidationCheck -Name "dependency:modStoryboardUi" -Passed $gameEvidence.storyboardModInstalled -Detail $storyboardMod -Severity warning
-    Add-ValidationCheck -Name "dependency:dlcStoryboardUi" -Passed $gameEvidence.storyboardDlcInstalled -Detail $storyboardDlc -Severity warning
 
     $runtimePath = Join-Path $resolvedGameRoot "mods\modAutoDriver"
     if (Test-Path -LiteralPath $runtimePath) {

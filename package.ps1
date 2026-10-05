@@ -76,7 +76,7 @@ $manifest = [ordered]@{
         "documentation",
         "input templates",
         "Bootstrap",
-        "StoryBoardUI",
+        "third-party Mods",
         "vanilla scripts",
         "user settings"
     )
