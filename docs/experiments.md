@@ -914,3 +914,24 @@ Pending validation:
 
 - Re-run game compilation after this second source cleanup.
 - Confirm NumPad2 while mounted and the remaining NumPad3/6/7/8/9 handlers.
+
+## 2026-10-05: Replace the development junction with a packaged runtime directory
+
+Preconditions and verification:
+
+- Built a clean package from commit `42a17e67abce4af5d0bb3e36190d89f66c5abe67`.
+- Repository validation passed against the real game root and live user input.
+- All sandbox deployment, rollback, and negative-path regression cases passed.
+- A real-root Dry Run recognized `mods/modAutoDriver` as a junction targeting `mods/AutoDriver` and made no changes.
+- The game and launcher processes were not running.
+
+Deployment result:
+
+- Replaced only the verified junction entry with a real `mods/modAutoDriver` directory.
+- Deployed exactly `content/scripts/local/mod_autodriver.ws`.
+- Source and deployed SHA-256 both equal `A20F4C751FF931DF75B8C939B9A5C37010855113F68096F90CC404D8B94755BC`.
+- Bootstrap registry and live user-input SHA-256 values were identical before and after deployment.
+- Preserved the development repository and its `.git` directory.
+- Wrote deployment receipt `build/deployments/deployment-20261005-210431-756.json` for verified rollback.
+
+The directory conversion is Confirmed. Game compilation of the post-cleanup source remains runtime pending.

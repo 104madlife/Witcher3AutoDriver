@@ -46,9 +46,9 @@ dlc\modtemplates\storyboardui\geralt_npc.w2ent
 
 这个结论来自静态源码和注册关系。只有在“不安装这些参考 Mod”的环境里成功完成游戏编译，才能把最小依赖组合提升为运行时确认。
 
-## 4. 跨电脑部署仍需处理的问题
+## 4. 跨电脑部署注意事项
 
-1. 本机 `mods/modAutoDriver` 是指向开发仓库 `mods/AutoDriver` 的目录联接。它是本机开发结构，不适合作为可直接搬运的发布结构。
+1. 本机 `mods/modAutoDriver` 已从开发仓库联接转换为真实运行目录，里面只包含打包后的 `mod_autodriver.ws`。跨电脑时应使用同样的发布包结构，不要复制开发仓库或创建目录联接。
 2. 仓库已经只保留 `modAutoDriver.input.settings`，其中包含完整的 NumPad8/9 状态覆盖和两种 Horse 状态的 NumPad2。
 3. 当前安装历史表明，按键还需要合并进用户目录的 `Documents/The Witcher 3/input.settings`；只放 Mod 内模板不一定生效。
 4. 当前没有仓库内独立编译工具，实际编译门槛仍是启动游戏。
@@ -56,8 +56,7 @@ dlc\modtemplates\storyboardui\geralt_npc.w2ent
 ## 5. 建议顺序
 
 1. 对删除无入口实验状态后的源码再执行一次游戏编译和按键冒烟测试。
-2. 使用仓库现有打包与事务部署工具生成真实的 `modAutoDriver` 运行目录，不再通过目录联接加载开发仓库。
-3. 在另一台电脑上验证最小组合：原版游戏、Bootstrap、Bootstrap registry、AutoDriver 和正确的用户按键。先验证加载，再逐项验证功能。
+2. 在另一台电脑上验证最小组合：原版游戏、Bootstrap、Bootstrap registry、AutoDriver 和正确的用户按键。先验证加载，再逐项验证功能。
 
 ## 6. 本次验证
 
@@ -68,6 +67,8 @@ dlc\modtemplates\storyboardui\geralt_npc.w2ent
 - 用户已确认移除 NumPad4/5 后游戏脚本编译通过，剩余按键可用。
 - 已统一为 `modAutoDriver.input.settings`，补齐 Horse 状态 NumPad2，并删除重复模板。
 - 已删除两个无入口的移动实验状态及其专属实现。
+- 已用干净 Git 提交生成运行包，并将本机 `modAutoDriver` 联接安全转换为真实运行目录；运行目录只包含一份 `mod_autodriver.ws`。
+- 部署后源码与运行文件 SHA-256 均为 `A20F4C751FF931DF75B8C939B9A5C37010855113F68096F90CC404D8B94755BC`，Bootstrap 注册表和用户输入文件哈希在部署前后未变化。
 - 静态搜索未发现 AutoDriver 源码、规范按键模板或有效注册表仍引用 StoryBoardUI、分身或镜头动作。
 - WitcherScript 花括号数量一致，Git diff 空白检查通过。
 - NumPad4/5 清理版本已通过用户的游戏编译验证；之后删除的无入口实验代码仍需再次启动游戏确认。

@@ -9,7 +9,7 @@ Knowledge scaffold adopted: 2026-08-15
 - Purpose: drive character, horse, protection, and teleport state changes for automated in-game visual-data collection experiments.
 - Mod form: WitcherScript content Mod implemented as a bootstrapped `CMod` state machine.
 - Source entry point: `content/scripts/local/mod_autodriver.ws`.
-- Current status: standalone repository conversion, runtime-only packaging, transactional sandbox deployment/rollback, and real-game-root Dry Run are complete. The user confirmed game compilation and remaining hotkeys after NumPad4/5 removal. The later input consolidation and unreachable-experiment cleanup require one fresh game validation, and the first real directory deployment is pending.
+- Current status: standalone repository conversion, runtime-only packaging, transactional deployment/rollback, and the first real directory deployment are complete. The user confirmed game compilation and remaining hotkeys after NumPad4/5 removal. The later input consolidation and unreachable-experiment cleanup require one fresh game validation.
 - Mod identity in source: `AutoDriver`, author `104madlife`, version `0.1`.
 
 ## Development Environment
@@ -17,9 +17,8 @@ Knowledge scaffold adopted: 2026-08-15
 - Game version: Next-Gen `4.0.0.103190(Build Machine)` observed for both DX11 and DX12 executables on 2026-09-02.
 - Language: WitcherScript.
 - Loader/integration: `modBootstrap-registry` calls `createAutoDriver()`.
-- Standalone repository location: `D:\workspace\ModDev\Witcher3AutoDriver` on the migration host.
-- Legacy repository location: `<game>/mods/AutoDriver`.
-- Runtime discovery path before first standalone deployment: `<game>/mods/modAutoDriver`, a directory junction targeting the legacy repository.
+- Development repository location on the current host: `<game>/mods/AutoDriver`.
+- Runtime discovery path: `<game>/mods/modAutoDriver`, now a real directory containing only the packaged runtime source.
 - Vanilla script reference: `<game>/content/content0/scripts`.
 - External runtime dependency: Bootstrap scripts, registry integration, and the matching `dlcBootstrap` resources. The current AutoDriver source no longer references StoryBoardUI, RadishSeeds, or SharedImports.
 - No standalone WitcherScript compiler is currently available. Repository validation, packaging, and deployment regression tests are provided, but game launch remains the authoritative compile gate.
@@ -121,8 +120,8 @@ Confirmed historical observations include successful Mod bootstrap/HUD startup, 
 
 The latest implementation still needs revalidation for:
 
-- compilation after the latent verified local-teleport changes;
-- compilation after removal of NumPad4/5 and the StoryBoardUI resource references;
+- compilation after removal of the unreachable tuned/custom movement experiments;
+- mounted NumPad2 delivery after canonical input consolidation;
 - direct local teleport from combat, swimming, diving, boat, passenger, climbing, and scripted-action states;
 - cross-world teleport from those states;
 - horse toggle and mounted teleport preparation;
