@@ -63,7 +63,7 @@ $previousKind = [string]$receipt.previousRuntime.kind
 if ($previousKind -notin @("junction", "directory", "absent")) {
     throw "Unsupported previous runtime kind: $previousKind"
 }
-if ($payload.previousExists) {
+if ($previousKind -eq "directory" -and $payload.previousExists) {
     $autoBackup = Assert-ChildPath -Path $payload.backup -Parent $receiptDirectory -Label "AutoDriver backup"
     if (-not (Test-Path -LiteralPath $autoBackup -PathType Leaf) -or (Get-Sha256 $autoBackup) -ne $payload.previousSha256) {
         throw "AutoDriver rollback backup is missing or changed: $autoBackup"

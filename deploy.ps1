@@ -127,8 +127,16 @@ function Add-AutoDriverRegistration {
         throw "Bootstrap registry createMods() braces are malformed."
     }
 
-    $insertion = "        add(createAutoDriver());$Newline"
-    return $Text.Insert($closingBrace, $insertion)
+    $lineStart = $Text.LastIndexOf($Newline, $closingBrace, [System.StringComparison]::Ordinal)
+    if ($lineStart -lt 0) {
+        $lineStart = 0
+    }
+    else {
+        $lineStart += $Newline.Length
+    }
+    $closingIndent = $Text.Substring($lineStart, $closingBrace - $lineStart)
+    $insertion = "$closingIndent    add(createAutoDriver());$Newline"
+    return $Text.Insert($lineStart, $insertion)
 }
 
 function Merge-AutoDriverInput {
@@ -196,8 +204,7 @@ function Remove-EmptyParents {
 
 foreach ($required in @(
     (Join-Path $resolvedGameRoot "bin\x64\witcher3.exe"),
-    (Join-Path $resolvedGameRoot "bin\x64_dx12\witcher3.exe"),
-    $modsRoot
+    (Join-Path $resolvedGameRoot "bin\x64_dx12\witcher3.exe")
 )) {
     if (-not (Test-Path -LiteralPath $required)) {
         throw "Invalid game root; missing required path: $required"

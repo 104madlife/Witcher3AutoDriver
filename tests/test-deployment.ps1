@@ -38,7 +38,6 @@ function New-GameFixture {
     New-Item -ItemType Directory -Path @(
         (Join-Path $game "bin\x64"),
         (Join-Path $game "bin\x64_dx12"),
-        (Join-Path $game "mods"),
         (Split-Path -Parent $input)
     ) -Force | Out-Null
     [System.IO.File]::WriteAllBytes((Join-Path $game "bin\x64\witcher3.exe"), [byte[]]@(1))
@@ -111,6 +110,12 @@ $inputText = Get-Content -Raw -LiteralPath $case.input
 foreach ($action in @("HorseWander", "WalkWander", "ToggleHorse", "GodMode", "OfficialTeleport", "RandomXYTeleport")) {
     if ($inputText -notmatch "AutoDriver_$action") { throw "Merged user input is missing AutoDriver_$action" }
 }
+$deployedFingerprint = Get-FixtureFingerprint $case.root
+$secondDryRun = (& $deploy -GameRoot $case.game -UserInputPath $case.input -PackageManifestPath $manifestPath -ReceiptDirectory $case.receipts -DryRun 6>&1 | Out-String)
+foreach ($expectedReuse in @("BootstrapMod: reuse", "BootstrapDlc: reuse", "BootstrapRegistry: reuse", "UserInput: reuse")) {
+    if (-not $secondDryRun.Contains($expectedReuse)) { throw "Idempotent Dry Run did not report: $expectedReuse" }
+}
+if ($deployedFingerprint -ne (Get-FixtureFingerprint $case.root)) { throw "Idempotent Dry Run changed fixture state" }
 $receipt = Get-LatestDeploymentReceipt $case.receipts
 $beforeRollback = Get-FixtureFingerprint $case.root
 & $restore -ReceiptPath $receipt -DryRun
@@ -129,7 +134,8 @@ $registryPath = Join-Path $case.game "mods\modBootstrap-registry\content\scripts
 New-Item -ItemType Directory -Path (Split-Path -Parent $registryPath) -Force | Out-Null
 $originalRegistry = "class CModRegistry extends CModFactory {`r`n    protected function createMods() {`r`n        add(createOtherMod());`r`n    }`r`n}`r`n"
 [System.IO.File]::WriteAllText($registryPath, $originalRegistry, [System.Text.UTF8Encoding]::new($false))
-$before = Get-FixtureFingerprint $case.root
+$beforeGame = Get-FixtureFingerprint $case.game
+$beforeInputHash = Get-Sha256 $case.input
 & $deploy -GameRoot $case.game -UserInputPath $case.input -PackageManifestPath $manifestPath -ReceiptDirectory $case.receipts
 $mergedRegistry = Get-Content -Raw -LiteralPath $registryPath
 if ($mergedRegistry -notmatch 'add\(createOtherMod\(\)\);' -or ([regex]::Matches($mergedRegistry, 'add\(createAutoDriver\(\)\);')).Count -ne 1) {
@@ -137,7 +143,9 @@ if ($mergedRegistry -notmatch 'add\(createOtherMod\(\)\);' -or ([regex]::Matches
 }
 $receipt = Get-LatestDeploymentReceipt $case.receipts
 & $restore -ReceiptPath $receipt
-if ((Get-FixtureFingerprint $case.root) -ne $before) { throw "Existing-Bootstrap rollback did not restore the exact fixture" }
+if ((Get-FixtureFingerprint $case.game) -ne $beforeGame -or (Get-Sha256 $case.input) -ne $beforeInputHash) {
+    throw "Existing-Bootstrap rollback did not restore the game and input fixture"
+}
 
 Write-Output "CASE: verified junction conversion still works"
 $case = New-GameFixture -Name "junction"

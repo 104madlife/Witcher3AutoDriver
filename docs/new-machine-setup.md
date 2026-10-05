@@ -9,8 +9,9 @@ Determine the Witcher 3 game root. A valid root contains all of these paths:
 ```text
 bin/x64/witcher3.exe
 bin/x64_dx12/witcher3.exe
-mods/
 ```
+
+The `mods` and `dlc` directories may be absent on a clean game installation; deployment creates the required component paths.
 
 The game may be installed through Steam or GOG and may be in a non-default library. Search known game libraries first. If more than one valid installation exists or none can be identified confidently, ask the user which game root to use.
 

@@ -964,3 +964,5 @@ Implementation:
 - Added `docs/new-machine-setup.md` with explicit path-discovery and ambiguity-handling instructions for the AI operating the new machine.
 
 The repository intentionally records no new-machine game-root or profile path. Generated deployment receipts contain the paths selected at execution time.
+
+Sandbox verification passed for a clean game root with no initial `mods` or `dlc` directories, exact dependency reuse, incremental registry merge and restoration, verified junction conversion and recreation, idempotent Dry Run, and refusal of changed dependencies, duplicate registration, tampered packages, or changed deployed payloads.
