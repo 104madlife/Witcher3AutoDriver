@@ -2,72 +2,97 @@
 
 AutoDriver is a WitcherScript state-machine Mod used for automated character, horse, protection, and teleport experiments in The Witcher 3.
 
-This repository is the standalone development source. The game-facing runtime name remains `modAutoDriver`.
+This private repository contains the AutoDriver source and its verified Bootstrap 0.5 Next-Gen runtime dependency. The game-facing runtime name remains `modAutoDriver`.
 
-## Runtime dependencies
+## Runtime contents
 
-- The Witcher 3 Next-Gen 4.x installation.
-- `modBootstrap` and `modBootstrap-registry`.
-- Exactly one `add(createAutoDriver());` registration in the effective Bootstrap registry.
-- User input bindings for the `AutoDriver_*` actions.
+- `mods/modAutoDriver`: AutoDriver WitcherScript.
+- `mods/modBootstrap`: the `CMod` base, logger, loader, and Bootstrap utilities.
+- `mods/modBootstrap-registry`: shared Bootstrap registry containing one `add(createAutoDriver());` registration.
+- `dlc/dlcBootstrap`: Bootstrap startup entity and DLC resources.
+- AutoDriver bindings merged into the user's `input.settings` during deployment.
 
-Bootstrap, vanilla scripts, and the user's `input.settings` are external dependencies. StoryBoardUI, RadishSeeds, and SharedImports are not required by the current AutoDriver implementation.
+StoryBoardUI, RadishSeeds, and SharedImports are not required.
 
-`modAutoDriver.input.settings` is the only input template. It includes the supported expanded teleport contexts and NumPad2 in both horse contexts. Merge it into the live user input configuration using the installation method appropriate for the target setup.
+The vendored Bootstrap files came from [Community Patch - Bootstrap and Utilities](https://www.nexusmods.com/witcher3/mods/2109). Its upstream permissions prohibit redistribution on other sites without permission. Keep this repository and packages containing `external/Bootstrap` private unless the author grants permission.
+
+## New-machine setup
+
+An AI configuring another machine should follow [docs/new-machine-setup.md](docs/new-machine-setup.md). It must determine or ask for:
+
+1. the Witcher 3 game root containing `bin`, `mods`, and `dlc`;
+2. the active user's `Documents/The Witcher 3/input.settings` path, accounting for redirected or OneDrive Documents folders.
+
+No repository script contains a machine-specific game or profile path.
 
 ## Repository validation
 
-Validation is read-only and does not claim that WitcherScript compiles:
+Validation checks AutoDriver, the vendored Bootstrap payload, input coverage, and—when paths are supplied—the target installation:
 
 ```powershell
 .\validate-project.ps1
 
 .\validate-project.ps1 `
-  -GameRoot "E:\SteamLibrary\steamapps\common\The Witcher 3" `
-  -UserInputPath "C:\Users\64617\Documents\The Witcher 3\input.settings"
+  -GameRoot $gameRoot `
+  -UserInputPath $userInputPath
 ```
 
 ## Package
 
-Create the runtime-only package without touching the game installation:
+Create the complete private installation package without touching the game:
 
 ```powershell
 .\package.ps1
 ```
 
-Expected runtime payload:
+The generated `artifacts/Release/game-root` tree contains:
 
 ```text
-artifacts\Release\modAutoDriver\content\scripts\local\mod_autodriver.ws
+game-root/
+├── mods/
+│   ├── modAutoDriver/
+│   ├── modBootstrap/
+│   └── modBootstrap-registry/
+└── dlc/
+    └── dlcBootstrap/
 ```
+
+Every packaged game file is recorded with its SHA-256 value in `package-manifest.json`.
 
 ## Safe deployment
 
-Always preview the transaction first:
+Preview the complete transaction first:
 
 ```powershell
 .\deploy.ps1 `
-  -GameRoot "E:\SteamLibrary\steamapps\common\The Witcher 3" `
-  -UserInputPath "C:\Users\64617\Documents\The Witcher 3\input.settings" `
+  -GameRoot $gameRoot `
+  -UserInputPath $userInputPath `
   -DryRun
 ```
 
-After reviewing the preview, deploy with the same command without `-DryRun`. The first deployment can replace the verified legacy `modAutoDriver` junction with a real runtime-only directory. It does not modify the junction target.
+After reviewing the preview, run the same command without `-DryRun`.
 
-Deployment does not edit Bootstrap registration or user input. Those integrations must already be present.
+Deployment performs these operations transactionally:
+
+- installs the bundled Bootstrap Mod and DLC when absent;
+- reuses an installed Bootstrap only when all expected files match the bundled version;
+- installs a missing registry or adds exactly one AutoDriver registration to an existing registry without removing other Mods;
+- deploys the AutoDriver runtime directory;
+- removes stale AutoDriver bindings and merges the canonical bindings into the live user input file;
+- records backups and hashes in a deployment receipt.
+
+The script stops before mutation when an installed Bootstrap file differs, a registry is malformed, a package hash is wrong, or the game is running.
 
 ## Rollback
 
 Exit the game, then use the exact deployment receipt:
 
 ```powershell
-.\restore-deployment.ps1 -ReceiptPath "<deployment-receipt.json>"
+.\restore-deployment.ps1 -ReceiptPath $deploymentReceipt
 ```
 
-For the first migration deployment, rollback removes only the verified deployed payload and recreates the prior junction. Later deployments restore only receipt-owned files.
+Rollback restores the previous AutoDriver runtime, registry, and user input. Bootstrap components are removed only when that deployment installed them; pre-existing compatible Bootstrap components are retained.
 
 ## Compilation and runtime acceptance
 
-No standalone WitcherScript compiler was found during migration. The authoritative compile gate is the game's script compilation at launch. Repository validation and packaging success do not prove gameplay behavior.
-
-See [docs/standalone-migration-plan.md](docs/standalone-migration-plan.md) for the evidence boundary, deployment design, rollback rules, and current NumPad2/3/6/7/8/9 acceptance checklist.
+The authoritative compile gate is the game's script compilation at launch. After deployment, launch the game and verify the AutoDriver startup message plus NumPad2/3/6/7/8/9. Repository validation, packaging, and sandbox tests cannot replace this game run.

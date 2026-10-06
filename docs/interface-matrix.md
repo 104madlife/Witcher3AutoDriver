@@ -4,7 +4,7 @@ This file is a reusable capability cache. Every entry is scoped to the recorded 
 
 ## Dependency audit addendum — 2026-10-05
 
-See [feature-dependency-audit.md](feature-dependency-audit.md) for the current feature inventory and deployment dependency evidence. On 2026-10-05, the failed NumPad4/5 clone and camera features, both StoryBoardUI resource loads, and the shared registry's explicit `createStoryboardUi()` call were removed. The user then confirmed successful game compilation and remaining hotkey delivery. Static inspection finds no StoryBoardUI, RadishSeeds, or SharedImports reference in AutoDriver source or its registry entry. Bootstrap scripts and `dlcBootstrap` remain required. Input configuration has since been consolidated into `modAutoDriver.input.settings`, with NumPad2 added to horse contexts. Removal of the later unreachable movement experiments still needs a fresh game compile.
+See [feature-dependency-audit.md](feature-dependency-audit.md) for the current feature inventory and deployment dependency evidence. On 2026-10-05, the failed NumPad4/5 clone and camera features, both StoryBoardUI resource loads, and the shared registry's explicit `createStoryboardUi()` call were removed. Input configuration was consolidated into `modAutoDriver.input.settings`, NumPad2 was added to horse contexts, and unreachable movement experiments were removed. The user confirmed that this final reduced implementation compiles and its current functions work in game. Static inspection finds no StoryBoardUI, RadishSeeds, or SharedImports reference in AutoDriver source or registry. Bootstrap scripts, registry, and `dlcBootstrap` remain required and are now vendored for private portable installation.
 
 ## Evidence States
 
@@ -38,7 +38,7 @@ See [feature-dependency-audit.md](feature-dependency-audit.md) for the current f
 - Entry point: global `createAutoDriver() : CMod`, registered through `add(createAutoDriver());`.
 - Evidence state: Confirmed.
 - Ownership/lifecycle: `CModAutoDriver extends CMod`; initialization registers listeners, enters idle state, and emits a HUD/log message.
-- Known limitations: the repository name `AutoDriver` was not loader-visible in this setup. A `modAutoDriver` directory junction is used.
+- Known limitations: the game-facing runtime directory must be named `modAutoDriver`; the current deployment uses a real packaged directory.
 - Source: `content/scripts/local/mod_autodriver.ws`; runtime startup HUD observation in `experiments.md`.
 - Last verified: 2026-06-01.
 
@@ -48,7 +48,7 @@ See [feature-dependency-audit.md](feature-dependency-audit.md) for the current f
 - Interface: `theInput.RegisterListener(this, handler, action)` plus action entries in the canonical `modAutoDriver.input.settings` template and live user input settings.
 - Evidence state: Confirmed for this installation.
 - Ownership/lifecycle: listeners are registered by `CModAutoDriver.init()`.
-- Known limitations: Mod-local settings did not populate the existing live user file automatically; installation still needs an explicit merge or equivalent input installer.
+- Known limitations: the live profile is shared state; deployment performs a backed-up, idempotent AutoDriver-only merge.
 - Source: source `init()`, `modAutoDriver.input.settings`, 2026-06-01 input experiment, and 2026-10-05 user validation.
 - Last verified: 2026-10-05.
 
@@ -98,7 +98,7 @@ See [feature-dependency-audit.md](feature-dependency-audit.md) for the current f
 - Evidence state: Known-bad for the AutoDriver product goal; removed by user decision on 2026-10-05.
 - Removal scope: input listeners, handlers, state machines, camera/clone state, helper functions, resource loads, input bindings, and the registry's explicit StoryBoardUI factory call.
 - Historical evidence: the static camera route ran with quality limitations; the clone route never reached accepted runtime behavior. Details remain in `experiments.md` and Git history.
-- Current boundary: no StoryBoardUI resource or API reference remains in AutoDriver source. In-game compilation of the reduced implementation is pending.
+- Current boundary: no StoryBoardUI resource or API reference remains in AutoDriver source. The reduced implementation has compiled successfully in game.
 
 ## Capability: Identify and toggle the player horse
 
@@ -150,12 +150,12 @@ See [feature-dependency-audit.md](feature-dependency-audit.md) for the current f
 - Source: standalone migration implementation and 57-check validation receipt.
 - Last verified: 2026-09-02.
 
-## Capability: Transactionally deploy a junction-backed WitcherScript Mod
+## Capability: Transactionally deploy AutoDriver and its Bootstrap dependency
 
-- Game/runtime: Windows directory junction at `<game>/mods/modAutoDriver` and a runtime-only WitcherScript package.
+- Game/runtime: Windows game root with AutoDriver, Bootstrap Mod/DLC, registry, and user input integration.
 - Interface: `deploy.ps1`, `restore-deployment.ps1`, package manifest, deployment receipt, and rollback receipt.
-- Evidence state: Confirmed in junction, existing-directory, and clean-install sandboxes; real game root Dry Run confirmed with zero writes.
-- Ownership/lifecycle: deployment owns only `modAutoDriver/content/scripts/local/mod_autodriver.ws`; Bootstrap, StoryBoardUI, vanilla scripts, user input, and the legacy junction target are verify-only.
-- Known limitations: the first real deployment has not been executed; game compilation and gameplay remain pending. Rollback refuses a payload changed after deployment.
-- Source: `tests/test-deployment.ps1` and the 2026-09-02 migration experiment.
-- Last verified: 2026-09-02.
+- Evidence state: AutoDriver-only deployment is confirmed on the real game root. Portable dependency deployment is covered by clean-machine, compatible-existing-dependency, registry-merge, junction, rollback, and refusal-path sandbox tests.
+- Ownership/lifecycle: deployment installs missing vendored Bootstrap components, reuses only matching shared components, merges registry/input with backups, and owns the AutoDriver runtime payload.
+- Known limitations: an installed Bootstrap tree with different expected file hashes requires explicit human review. Rollback refuses files changed after deployment.
+- Source: `tests/test-deployment.ps1`, `docs/new-machine-setup.md`, and 2026-10-05 deployment experiments.
+- Last verified: 2026-10-05.

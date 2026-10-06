@@ -33,7 +33,7 @@ These entries record repeatable, evidence-backed traps. Their scope is AutoDrive
 - Verified fix/avoidance: keep only `modAutoDriver.input.settings` as the canonical template; validate every registered action against it and the live profile.
 - Misleading workaround: keep both files and rely on maintainers to update them together.
 - Evidence: repository comparison on 2026-08-15 and consolidation on 2026-10-05.
-- Last verified: static source review 2026-10-05; revised template needs a fresh game run.
+- Last verified: user game compilation and functional test on 2026-10-05.
 
 ## Latent calls cannot appear directly in a return or condition
 
@@ -121,7 +121,7 @@ These entries record repeatable, evidence-backed traps. Their scope is AutoDrive
 - Verified fix/avoidance: remove the failed feature code and resource loads, and keep the AutoDriver registry entry limited to `add(createAutoDriver());`.
 - Misleading workaround: leave the unconditional factory call in the registry and describe StoryBoardUI as optional.
 - Evidence: 2026-10-05 dependency audit and removal; current static scan contains no StoryBoardUI reference in AutoDriver source or registry.
-- Last verified: static source review 2026-10-05; reduced installation still needs in-game compilation after the latest cleanup.
+- Last verified: user game compilation and functional test on 2026-10-05.
 
 ## Copying into a junction-backed runtime path can mutate the source repository
 

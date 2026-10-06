@@ -80,6 +80,11 @@ function Get-InputActionSummary {
 $requiredFiles = @(
     "content\scripts\local\mod_autodriver.ws",
     "modAutoDriver.input.settings",
+    "external\Bootstrap\dependency.json",
+    "external\Bootstrap\game-root\mods\modBootstrap\content\scripts\local\bootstrap\utils\basemod.ws",
+    "external\Bootstrap\game-root\mods\modBootstrap\content\scripts\local\bootstrap\utils\bootstrap.ws",
+    "external\Bootstrap\game-root\mods\modBootstrap-registry\content\scripts\local\mods_registry.ws",
+    "external\Bootstrap\game-root\dlc\dlcBootstrap\content\blob0.bundle",
     "PROJECT.md",
     "README.md",
     "docs\feature-dependency-audit.md",
@@ -158,6 +163,24 @@ $storyboardReferences = @(
 )
 Add-ValidationCheck -Name "storyboard-resource-references" -Passed ($storyboardReferences.Count -eq 0) -Detail (($storyboardReferences -join ", ") -replace '^$', '<none>')
 
+$bundledDependencyPath = Join-Path $projectRoot "external\Bootstrap\dependency.json"
+$bundledRegistryPath = Join-Path $projectRoot "external\Bootstrap\game-root\mods\modBootstrap-registry\content\scripts\local\mods_registry.ws"
+$bundledBootstrapPath = Join-Path $projectRoot "external\Bootstrap\game-root\mods\modBootstrap"
+$bundledDlcPath = Join-Path $projectRoot "external\Bootstrap\game-root\dlc\dlcBootstrap"
+if (Test-Path -LiteralPath $bundledDependencyPath -PathType Leaf) {
+    $bundledDependency = Get-Content -Raw -LiteralPath $bundledDependencyPath | ConvertFrom-Json
+    Add-ValidationCheck -Name "bundled-bootstrap:version" -Passed ($bundledDependency.version -eq "0.5-NEXT-GEN") -Detail "version=$($bundledDependency.version)"
+}
+if (Test-Path -LiteralPath $bundledRegistryPath -PathType Leaf) {
+    $bundledRegistry = Get-Content -Raw -LiteralPath $bundledRegistryPath
+    $bundledRegistrationCount = ([regex]::Matches($bundledRegistry, 'add\s*\(\s*createAutoDriver\s*\(\s*\)\s*\)\s*;')).Count
+    Add-ValidationCheck -Name "bundled-bootstrap:registry" -Passed ($bundledRegistrationCount -eq 1) -Detail "AutoDriver registrations=$bundledRegistrationCount"
+}
+$bundledBootstrapFiles = if (Test-Path -LiteralPath $bundledBootstrapPath -PathType Container) { @(Get-ChildItem -LiteralPath $bundledBootstrapPath -Recurse -File) } else { @() }
+$bundledDlcFiles = if (Test-Path -LiteralPath $bundledDlcPath -PathType Container) { @(Get-ChildItem -LiteralPath $bundledDlcPath -Recurse -File) } else { @() }
+Add-ValidationCheck -Name "bundled-bootstrap:mod-files" -Passed ($bundledBootstrapFiles.Count -eq 18) -Detail "files=$($bundledBootstrapFiles.Count)"
+Add-ValidationCheck -Name "bundled-bootstrap:dlc-files" -Passed ($bundledDlcFiles.Count -eq 19) -Detail "files=$($bundledDlcFiles.Count)"
+
 if ($BaselinePreservation) {
     $baseline = Get-Content -Raw -LiteralPath (Join-Path $projectRoot "baselines\legacy-current\manifest.json") | ConvertFrom-Json
     foreach ($entry in $baseline.trackedFiles) {
@@ -196,6 +219,9 @@ if ($GameRoot) {
 
     $bootstrapPath = Join-Path $resolvedGameRoot "mods\modBootstrap"
     Add-ValidationCheck -Name "dependency:modBootstrap" -Passed (Test-Path -LiteralPath $bootstrapPath -PathType Container) -Detail $bootstrapPath
+
+    $bootstrapDlcPath = Join-Path $resolvedGameRoot "dlc\dlcBootstrap\content\blob0.bundle"
+    Add-ValidationCheck -Name "dependency:dlcBootstrap" -Passed (Test-Path -LiteralPath $bootstrapDlcPath -PathType Leaf) -Detail $bootstrapDlcPath
 
     $registryPath = Join-Path $resolvedGameRoot "mods\modBootstrap-registry\content\scripts\local\mods_registry.ws"
     $registryExists = Test-Path -LiteralPath $registryPath -PathType Leaf
