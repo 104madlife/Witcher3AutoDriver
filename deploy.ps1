@@ -316,10 +316,15 @@ if (-not (Test-Path -LiteralPath $inputTemplatePath -PathType Leaf) -or (Get-Sha
     throw "Packaged AutoDriver input template is missing or has the wrong hash."
 }
 $inputTemplateText = (Get-TextFileInfo -Path $inputTemplatePath).text
-$inputExists = Test-Path -LiteralPath $resolvedUserInputPath -PathType Leaf
-$inputTextInfo = if ($inputExists) { Get-TextFileInfo -Path $resolvedUserInputPath } else { [ordered]@{ text = ""; encoding = [System.Text.UTF8Encoding]::new($false); newline = "`r`n" } }
+if (-not (Test-Path -LiteralPath $resolvedUserInputPath -PathType Leaf)) {
+    throw "Missing live user input profile: $resolvedUserInputPath. Launch The Witcher 3 once (main menu or a loaded save) and exit so the game generates a complete input.settings, then re-run deployment. Deployment must not fabricate the file: the game discards custom bindings from incomplete profile files."
+}
+$inputTextInfo = Get-TextFileInfo -Path $resolvedUserInputPath
+if ($inputTextInfo.text -notmatch '(?m)^\s*\[InputSettings\]\s*$' -or $inputTextInfo.text -notmatch '(?m)^\s*Version\s*=\s*\d+\s*$') {
+    throw "The live user input profile is not a complete game-generated file (missing [InputSettings] or Version): $resolvedUserInputPath. Launch The Witcher 3 once and exit to let the game regenerate it, then re-run deployment."
+}
 $inputDesiredText = Merge-AutoDriverInput -CurrentText $inputTextInfo.text -TemplateText $inputTemplateText -Newline $inputTextInfo.newline
-$inputMode = if (-not $inputExists) { "create" } elseif ($inputDesiredText -cne $inputTextInfo.text) { "update" } else { "reuse" }
+$inputMode = if ($inputDesiredText -cne $inputTextInfo.text) { "update" } else { "reuse" }
 
 $runtimeState = Get-RuntimeState -Path $runtimePath
 if ($runtimeState.kind -eq "junction") {
@@ -345,7 +350,7 @@ $autoPreviousHash = if ($autoPreviousExists) { Get-Sha256 $autoPayload.destinati
 $autoBackupPath = if ($runtimeState.kind -eq "directory" -and $autoPreviousExists) { Join-Path $backupDirectory "AutoDriver\mod_autodriver.ws" } else { $null }
 $registryPreviousHash = if ($registryExists) { Get-Sha256 $registryPath } else { $null }
 $registryBackupPath = if ($registryMode -eq "update") { Join-Path $backupDirectory "BootstrapRegistry\mods_registry.ws" } else { $null }
-$inputPreviousHash = if ($inputExists) { Get-Sha256 $resolvedUserInputPath } else { $null }
+$inputPreviousHash = Get-Sha256 $resolvedUserInputPath
 $inputBackupPath = if ($inputMode -eq "update") { Join-Path $backupDirectory "UserInput\input.settings" } else { $null }
 
 Write-Output "AutoDriver runtime mode: $($runtimeState.kind)"
@@ -519,8 +524,7 @@ catch {
         }
 
         if ($inputWritten) {
-            if ($inputMode -eq "update") { Copy-Item -LiteralPath $inputBackupPath -Destination $resolvedUserInputPath -Force }
-            elseif ($inputMode -eq "create" -and (Test-Path -LiteralPath $resolvedUserInputPath -PathType Leaf)) { Remove-Item -LiteralPath $resolvedUserInputPath -Force }
+            Copy-Item -LiteralPath $inputBackupPath -Destination $resolvedUserInputPath -Force
         }
         if ($registryWritten) {
             if ($registryMode -eq "update") { Copy-Item -LiteralPath $registryBackupPath -Destination $registryPath -Force }

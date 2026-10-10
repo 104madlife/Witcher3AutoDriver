@@ -23,6 +23,8 @@ An AI configuring another machine should follow [docs/new-machine-setup.md](docs
 1. the Witcher 3 game root containing `bin`, `mods`, and `dlc`;
 2. the active user's `Documents/The Witcher 3/input.settings` path, accounting for redirected or OneDrive Documents folders.
 
+The live profile must already exist: deployment refuses to create or merge a missing or incomplete file. If it does not exist yet, launch the game once and exit first.
+
 No repository script contains a machine-specific game or profile path.
 
 ## Repository validation

@@ -30,6 +30,8 @@ function Get-Sha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
 }
 
+$completeInputText = "[InputSettings]`r`nVersion=55`r`n`r`n[Exploration]`r`nIK_A=(Action=Jump)`r`n`r`n[Horse]`r`nIK_E=(Action=Mount)`r`n"
+
 function New-GameFixture {
     param([string]$Name)
     $root = Join-Path $testRoot $Name
@@ -42,7 +44,7 @@ function New-GameFixture {
     ) -Force | Out-Null
     [System.IO.File]::WriteAllBytes((Join-Path $game "bin\x64\witcher3.exe"), [byte[]]@(1))
     [System.IO.File]::WriteAllBytes((Join-Path $game "bin\x64_dx12\witcher3.exe"), [byte[]]@(1))
-    [System.IO.File]::WriteAllText($input, "[Exploration]`r`nIK_A=(Action=Jump)`r`n`r`n[Horse]`r`nIK_E=(Action=Mount)`r`n", [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText($input, $completeInputText, [System.Text.UTF8Encoding]::new($false))
     return [ordered]@{
         root = $root
         game = $game
@@ -124,7 +126,25 @@ if ($beforeRollback -ne (Get-FixtureFingerprint $case.root)) { throw "Rollback D
 if (Test-Path -LiteralPath (Join-Path $case.game "mods\modAutoDriver")) { throw "Clean rollback left AutoDriver" }
 if (Test-Path -LiteralPath (Join-Path $case.game "mods\modBootstrap")) { throw "Clean rollback left installed modBootstrap" }
 if (Test-Path -LiteralPath (Join-Path $case.game "dlc\dlcBootstrap")) { throw "Clean rollback left installed dlcBootstrap" }
-if ((Get-Content -Raw -LiteralPath $case.input) -ne "[Exploration]`r`nIK_A=(Action=Jump)`r`n`r`n[Horse]`r`nIK_E=(Action=Mount)`r`n") { throw "Clean rollback did not restore user input" }
+if ((Get-Content -Raw -LiteralPath $case.input) -ne $completeInputText) { throw "Clean rollback did not restore user input" }
+
+Write-Output "CASE: missing user input profile is rejected before mutation"
+$case = New-GameFixture -Name "missing-input"
+Remove-Item -LiteralPath $case.input -Force
+$before = Get-FixtureFingerprint $case.root
+Assert-Throws -Label "missing input.settings" -Operation {
+    & $deploy -GameRoot $case.game -UserInputPath $case.input -PackageManifestPath $manifestPath -ReceiptDirectory $case.receipts -DryRun
+}
+if ($before -ne (Get-FixtureFingerprint $case.root)) { throw "Missing-input rejection mutated fixture" }
+
+Write-Output "CASE: incomplete user input profile is rejected before mutation"
+$case = New-GameFixture -Name "incomplete-input"
+[System.IO.File]::WriteAllText($case.input, "[Exploration]`r`nIK_A=(Action=Jump)`r`n", [System.Text.UTF8Encoding]::new($false))
+$before = Get-FixtureFingerprint $case.root
+Assert-Throws -Label "incomplete input.settings" -Operation {
+    & $deploy -GameRoot $case.game -UserInputPath $case.input -PackageManifestPath $manifestPath -ReceiptDirectory $case.receipts -DryRun
+}
+if ($before -ne (Get-FixtureFingerprint $case.root)) { throw "Incomplete-input rejection mutated fixture" }
 
 Write-Output "CASE: existing compatible Bootstrap is reused and registry is merged"
 $case = New-GameFixture -Name "existing-bootstrap"

@@ -24,6 +24,17 @@ These entries record repeatable, evidence-backed traps. Their scope is AutoDrive
 - Evidence: 2026-06-01 input merge and subsequent binding diagnosis.
 - Last verified: 2026-06-01.
 
+## Deployment must not create or merge an incomplete input.settings
+
+- Game/runtime/language: The Witcher 3 Next-Gen input configuration and the deployment input merge.
+- Applicable versions: Next-Gen 4.04a GOG Complete Edition observed 2026-10-10; complete files carry `[InputSettings]` and `Version=55`.
+- Symptom: after a first deployment onto a machine with no live `input.settings`, Bootstrap and AutoDriver start and log normally, but every NumPad hotkey is dead and the live file contains zero `AutoDriver_*` entries.
+- Root cause: deployment had created a 59-line partial file containing only the 12 template sections. The game does not treat that as a complete profile; it regenerated the live file from its own complete binding state, and the custom actions were discarded.
+- Verified fix/avoidance: merge bindings only into an existing complete game-generated profile. Deployment now refuses a missing or incomplete file and directs the operator to launch the game once (main menu or a loaded save) so the game writes the profile before deployment.
+- Misleading workaround: suspecting Mod load or script compilation. The scriptslog proved `bootstrap v0.5 started` and `AutoDriver loaded` while the live file still had no bindings.
+- Evidence: 2026-10-10 diagnosis; the game rewrote the partial file to a complete 99 KB profile with zero AutoDriver bindings; after merging into the complete file, 36 bindings survived the next game run and the hotkeys worked.
+- Last verified: 2026-10-10.
+
 ## Duplicate repository input templates can drift
 
 - Game/runtime/language: repository packaging and Witcher 3 input contexts.

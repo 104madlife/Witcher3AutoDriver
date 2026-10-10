@@ -82,6 +82,7 @@ Bootstrap and the registry are shared at runtime. Deployment installs them when 
 
 - `modAutoDriver.input.settings` is the single canonical input template and declares all current `AutoDriver_*` actions.
 - Deployment removes stale AutoDriver lines and merges the canonical bindings into the live user `input.settings`.
+- Deployment requires an existing complete game-generated `input.settings`; on a fresh machine, launch the game once and exit before deploying. It refuses a missing or incomplete profile instead of fabricating one.
 - The canonical template includes NumPad2 in both horse contexts and NumPad8/9 in the supported combat, swimming, diving, boat, climbing, and scripted-action contexts.
 
 ### Launch / reload

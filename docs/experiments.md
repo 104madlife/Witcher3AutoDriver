@@ -966,3 +966,25 @@ Implementation:
 The repository intentionally records no new-machine game-root or profile path. Generated deployment receipts contain the paths selected at execution time.
 
 Sandbox verification passed for a clean game root with no initial `mods` or `dlc` directories, exact dependency reuse, incremental registry merge and restoration, verified junction conversion and recreation, idempotent Dry Run, and refusal of changed dependencies, duplicate registration, tampered packages, or changed deployed payloads.
+
+## 2026-10-10: First-run input profile reset and deployment guard
+
+Symptom on a new machine (GOG Complete Edition 4.04a, game root on `D:`):
+
+- Bootstrap and AutoDriver appeared to load, but NumPad2/3/6/7/8/9 produced no response;
+- the live `input.settings` contained zero `AutoDriver_*` bindings.
+
+Diagnosis:
+
+- The first deployment on this machine created `input.settings` from nothing; the merge wrote a 59-line partial file containing only the 12 template sections.
+- The game does not accept that shape as a complete profile. During the next run it rewrote the live file into a complete 99 KB profile and the AutoDriver actions were lost.
+- A `-debugscripts` launch produced `Documents/The Witcher 3/scriptslog.txt` with `bootstrap v0.5 started` and `AutoDriver loaded`, proving the Mod and its listeners were active; only the bindings were missing.
+- `content/content0/x64.final.redscripts` contained `CModAutoDriver` and `createAutoDriver` symbols, confirming successful script compilation.
+
+Fix:
+
+- Re-merged the canonical bindings into the complete game-generated profile; all 36 bindings survived the next game run and the hotkeys worked (god mode, official cross-world teleport, and random XY teleport were verified in the scripts log).
+- Deployment now refuses a missing or incomplete live profile (no `[InputSettings]` or `Version` section) and instructs the operator to launch the game once and exit before deploying.
+- Deployment regression tests now reject missing and incomplete profiles without mutating the fixture.
+
+Recorded because the failure looked like a Mod or loader problem even though loading was healthy.
